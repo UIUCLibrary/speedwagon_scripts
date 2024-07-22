@@ -212,7 +212,7 @@ def get_args_parser() -> argparse.ArgumentParser:
         help="Application icon (default: %(default)s)"
     ),
     parser.add_argument(
-        "--app-name", default="Speedwagon UIUC Prescon",
+        "--app-name", default="Speedwagon",
         help="Name of application (default: %(default)s)"
     )
     parser.add_argument(
