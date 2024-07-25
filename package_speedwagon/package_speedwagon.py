@@ -14,7 +14,7 @@ import subprocess
 import os
 from typing import Optional, Callable, Dict, List, Union, Sequence
 import zipfile
-
+import packaging.version
 import cmake
 from importlib import metadata
 
@@ -430,8 +430,13 @@ set(CPACK_PACKAGE_INSTALL_DIRECTORY "Speedwagon - UIUC")
 set(CPACK_PACKAGE_EXECUTABLES "speedwagon" "%(app_name)s")
 """
 
-    def get_cpack_package_file_name(self) -> str:
-        return "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CPACK_SYSTEM_NAME}"  # noqa: E501
+    def get_cpack_package_file_name(self, version: packaging.version.Version) -> str:
+        if not version.is_prerelease:
+            return "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CPACK_SYSTEM_NAME}"  # noqa: E501
+        prerelease = ''.join(map(str, version.pre))
+        return "${CPACK_PACKAGE_NAME}-"\
+               "${CPACK_PACKAGE_VERSION}." f"{prerelease}"\
+               "-${CPACK_SYSTEM_NAME}"  # noqa: E501
 
     def get_license_path(self) -> str:
         """Get path to License file."""
@@ -473,9 +478,16 @@ set(CPACK_PACKAGE_EXECUTABLES "speedwagon" "%(app_name)s")
         return "${CMAKE_SYSTEM_NAME}"
 
     def general_section(self) -> str:
-        major_version = int(self.package_metadata['version'].split(".")[0])
-        minor_version = int(self.package_metadata['version'].split(".")[1])
-        patch_version = int(self.package_metadata['version'].split(".")[2])
+        string = self.package_metadata['version']
+        version = packaging.version.Version(string)
+        major_version, minor_version, patch_version, tweak = (
+            version.major,
+            version.minor,
+            version.micro,
+            ''.join(map(str, version.pre))
+        )
+
+
         specs = {
             "cpack_generator": self.cpack_generator_name(),
             "cpack_package_name": self.app_name,
@@ -493,7 +505,7 @@ set(CPACK_PACKAGE_EXECUTABLES "speedwagon" "%(app_name)s")
             "cpack_package_version_minor": minor_version,
             "cpack_package_version_patch": patch_version,
             "app_name": self.app_name,
-            "cpack_package_file_name": self.get_cpack_package_file_name(),
+            "cpack_package_file_name": self.get_cpack_package_file_name(version),
             "cpack_resource_file_license": os.path.abspath(
                 self.get_license_path()
             ).replace(os.sep, '/'),
@@ -516,11 +528,15 @@ class MacOSPackageGenerator(CPackGenerator):
     def package_specific_config_lines(self) -> str:
         return ''
 
-    def get_cpack_package_file_name(self) -> str:
+    def get_cpack_package_file_name(self, version: packaging.version.Version) -> str:
         arch = 'x86_64' if platform.processor() == 'i386' else "arm64"
         system = f'macos-{arch}'
-        return "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-" f"{system}"
-
+        if not version.is_prerelease:
+            return "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-" f"{system}"
+        prerelease = ''.join(map(str, version.pre))
+        return "${CPACK_PACKAGE_NAME}-" \
+               "${CPACK_PACKAGE_VERSION}." f"{prerelease}-" \
+               f"{system}"  # noqa: E501
 
 def read_toml_data(toml_config_file: pathlib.Path) -> Dict[str, typing.Any]:
     """Read contents of toml file.

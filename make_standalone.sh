@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-PYTHON_SCRIPT=$(dirname "$0")/./packaging/package_speedwagon.py
+PYTHON_SCRIPT=$(dirname "$0")/./package_speedwagon/package_speedwagon.py
 DEFAULT_BUILD_VENV=build/build_standalone_build_env
 build_venv=$DEFAULT_BUILD_VENV
 
