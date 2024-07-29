@@ -480,13 +480,17 @@ set(CPACK_PACKAGE_EXECUTABLES "speedwagon" "%(app_name)s")
     def general_section(self) -> str:
         string = self.package_metadata['version']
         version = packaging.version.Version(string)
-        major_version, minor_version, patch_version, tweak = (
+        major_version, minor_version, patch_version = (
             version.major,
             version.minor,
-            version.micro,
-            ''.join(map(str, version.pre))
+            version.micro
         )
-
+        if version.is_devrelease:
+            tweak = str(version.dev)
+        elif version.is_prerelease:
+            tweak = ''.join(map(str, version.pre))
+        else:
+            tweak = None
 
         specs = {
             "cpack_generator": self.cpack_generator_name(),
@@ -533,6 +537,13 @@ class MacOSPackageGenerator(CPackGenerator):
         system = f'macos-{arch}'
         if not version.is_prerelease:
             return "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-" f"{system}"
+        if version.is_devrelease:
+            return (
+                "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}"
+                f".dev{version.dev}" 
+                f"-{system}"
+            )
+
         prerelease = ''.join(map(str, version.pre))
         return "${CPACK_PACKAGE_NAME}-" \
                "${CPACK_PACKAGE_VERSION}." f"{prerelease}-" \
