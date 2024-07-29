@@ -433,6 +433,11 @@ set(CPACK_PACKAGE_EXECUTABLES "speedwagon" "%(app_name)s")
     def get_cpack_package_file_name(self, version: packaging.version.Version) -> str:
         if not version.is_prerelease:
             return "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${CPACK_SYSTEM_NAME}"  # noqa: E501
+        if version.is_devrelease:
+            return (
+                "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}"
+                f".dev{version.dev}"
+            )
         prerelease = ''.join(map(str, version.pre))
         return "${CPACK_PACKAGE_NAME}-"\
                "${CPACK_PACKAGE_VERSION}." f"{prerelease}"\
