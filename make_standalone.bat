@@ -1,6 +1,6 @@
 @echo off
 setlocal
-set PYTHON_SCRIPT=%~dp0\.\package_speedwagon\package_speedwagon.py
+set PYTHON_SCRIPT=%~dp0\package_speedwagon\package_speedwagon.py
 set BUILD_VENV=build\build_standalone_build_env
 
 
@@ -22,7 +22,7 @@ if "%~1"=="--venv-path" (
     shift
     goto parse_args
 )
-set "REMAINING_ARGS=%REMAINING_ARGS% %~1"
+set "REMAINING_ARGS=%REMAINING_ARGS% "%~1""
 shift
 goto parse_args
 
