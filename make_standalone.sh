@@ -21,9 +21,8 @@ create_venv() {
 create_standalone(){
     venv_path=$1
     shift;
-    script_args=$@
     . $venv_path/bin/activate
-    $venv_path/bin/python $PYTHON_SCRIPT $script_args
+    $venv_path/bin/python $PYTHON_SCRIPT "$@"
     deactivate
 }
 
@@ -66,5 +65,5 @@ echo "Using Python from: $python_path"
 if [[ ! -e "$build_venv" ]]; then
     create_venv $python_path $build_venv
 fi
-create_standalone $build_venv $@
+create_standalone $build_venv "$@"
 # python $PYTHON_SCRIPT $@
