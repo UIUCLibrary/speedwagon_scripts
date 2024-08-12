@@ -36,6 +36,7 @@ goto:end_args
 
 :create_standalone
      %BUILD_VENV%\Scripts\python %PYTHON_SCRIPT% %REMAINING_ARGS%
+     if %ERRORLEVEL% NEQ 0 exit %ERRORLEVEL%
      goto :eof
 
 :end_args
