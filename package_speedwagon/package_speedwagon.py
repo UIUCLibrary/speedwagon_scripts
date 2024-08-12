@@ -12,7 +12,7 @@ import argparse
 import re
 import subprocess
 import os
-from typing import Optional, Callable, Dict, List, Union, Sequence
+from typing import Optional, Callable, Dict, List, Union, Sequence, Iterable
 import zipfile
 import packaging.version
 import cmake
@@ -445,7 +445,13 @@ set(CPACK_PACKAGE_EXECUTABLES "speedwagon" "%(app_name)s")
 
     def get_license_path(self) -> str:
         """Get path to License file."""
-        return os.path.join(self.output_path, "LICENSE")
+        expected_license_file = os.path.join(self.output_path, "LICENSE")
+        return get_license(
+            strategies_list=[
+                LocateLicenseFile(),
+                GenerateNoLicenseGivenFile(expected_license_file)
+            ]
+        )
 
     def __init__(
         self,
@@ -496,6 +502,12 @@ set(CPACK_PACKAGE_EXECUTABLES "speedwagon" "%(app_name)s")
             tweak = ''.join(map(str, version.pre))
         else:
             tweak = None
+        try:
+            license_path = self.get_license_path()
+        except FileNotFoundError:
+            license_path = os.path.join(self.output_path, "LICENSE")
+            with open(license_path, 'w') as f:
+                f.write("No License provided")
 
         specs = {
             "cpack_generator": self.cpack_generator_name(),
@@ -516,7 +528,7 @@ set(CPACK_PACKAGE_EXECUTABLES "speedwagon" "%(app_name)s")
             "app_name": self.app_name,
             "cpack_package_file_name": self.get_cpack_package_file_name(version),
             "cpack_resource_file_license": os.path.abspath(
-                self.get_license_path()
+                license_path
             ).replace(os.sep, '/'),
             "cpack_package_description_file": os.path.abspath(
                 generate_package_description_file(
@@ -578,11 +590,15 @@ set(CPACK_WIX_ARCHITECTURE "%(cpack_wix_architecture)s")
 """
 
     def get_license_path(self) -> str:
-        out_file_path = os.path.join(self.output_path, 'LICENSE.txt')
-        with open('LICENSE', "r") as source_file:
-            with open(out_file_path, "w") as formated_file:
-                formated_file.write(source_file.read())
-        return os.path.abspath(out_file_path)
+        expected_license_file = os.path.join(self.output_path, "LICENSE.txt")
+        strategies = [
+            CopyLicenseFile(
+                source_file='LICENSE',
+                output_file=expected_license_file
+            ),
+            GenerateNoLicenseGivenFile(expected_license_file),
+        ]
+        return get_license(strategies)
 
     def cpack_generator_name(self) -> str:
         return "WIX"
@@ -928,6 +944,76 @@ def main() -> None:
         build_path=args.build_path,
         cl_args=args,
     )
+
+
+class GenerateNoLicenseGivenFile:
+
+    def __init__(self, output_file: str) -> None:
+        self.output_file = output_file
+
+    @staticmethod
+    def get_license_text():
+        return "No License given"
+
+    def write_license_file(self):
+        with open(self.output_file, "w", encoding="utf-8") as license_file:
+            license_file.write(self.get_license_text())
+
+    def __call__(self) -> Optional[str]:
+        self.write_license_file()
+        return os.path.abspath(self.output_file)
+
+class LocateLicenseFile:
+
+    def __init__(self, search_paths: Optional[Iterable[str]] = None) -> None:
+        super().__init__()
+        self.search_paths = search_paths or ['.']
+        self.potential_file_name = "LICENSE"
+
+    def locate_license_file(self) -> Optional[str]:
+
+        for search_path in self.search_paths:
+            potential_file = os.path.join(search_path, self.potential_file_name)
+            if os.path.exists(potential_file):
+                return potential_file
+    def __call__(self):
+        license_file = self.locate_license_file()
+        if license_file:
+            return os.path.abspath(license_file)
+
+class CopyLicenseFile:
+
+    def __init__(self, source_file: str, output_file: str) -> None:
+        super().__init__()
+        self.output_file = output_file
+        self.source_file = source_file
+
+    def copy_file(self) -> None:
+        with open(self.source_file, "r") as source_file:
+            with open(self.output_file, "w") as formated_file:
+                formated_file.write(source_file.read())
+
+    def pre_check(self) -> bool:
+        if not os.path.exists(self.source_file):
+            return False
+        return True
+
+    def __call__(self) -> Optional[str]:
+        if not self.pre_check():
+            return None
+        self.copy_file()
+        return os.path.abspath(self.output_file)
+
+
+def get_license(
+    strategies_list: List[Callable[[], Optional[str]]] = None
+) -> str:
+    for strategy in strategies_list:
+        result = strategy()
+        if result is None:
+            continue
+        return result
+    raise FileNotFoundError("Unable to find license file")
 
 
 if __name__ == '__main__':
