@@ -1,6 +1,5 @@
 @echo off
 setlocal
-set PYTHON_SCRIPT=%~dp0\package_speedwagon\package_speedwagon.py
 set BUILD_VENV=build\build_standalone_build_env
 
 
@@ -35,7 +34,7 @@ goto:end_args
     goto :eof
 
 :create_standalone
-     %BUILD_VENV%\Scripts\python %PYTHON_SCRIPT% %REMAINING_ARGS%
+     %BUILD_VENV%\Scripts\python -m package_speedwagon %REMAINING_ARGS%
      if %ERRORLEVEL% NEQ 0 exit %ERRORLEVEL%
      goto :eof
 
