@@ -2,7 +2,7 @@
 import abc
 import pathlib
 import platform
-import tomllib
+
 import shutil
 import sys
 import tempfile
@@ -16,7 +16,15 @@ from typing import Optional, Callable, Dict, List, Union, Sequence, Iterable
 import zipfile
 import packaging.version
 import cmake
-from importlib import metadata
+
+if sys.version_info < (3, 10):
+    import importlib_metadata as metadata
+else:
+    from importlib import metadata
+if sys.version_info < (3, 11):
+    from pip._vendor import tomli as tomllib
+else:
+    import tomllib
 
 import PyInstaller.__main__
 
