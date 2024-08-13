@@ -1,0 +1,4 @@
+coverage
+cmake
+pyinstaller
+pytest
