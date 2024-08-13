@@ -1,4 +1,5 @@
 coverage
+mypy
 pytest
 pytest-cov
 tox

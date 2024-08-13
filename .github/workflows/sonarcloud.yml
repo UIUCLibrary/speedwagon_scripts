@@ -31,6 +31,9 @@ jobs:
         run: |
           python -m pip install -r requirements-dev.txt
           tox run-parallel -e clean,py38,py39,py310,py311,py312,sonar_report
+      - name: Run MyPy
+        run: |
+          mypy package_speedwagon | tee reports/mypy.txt
       - name: Analyze with SonarCloud
 
         # You can pin the exact commit or the version.
@@ -46,6 +49,7 @@ jobs:
             -Dsonar.projectKey=UIUCLibrary_speedwagon_scripts
             -Dsonar.organization=uiuclibrary
             -Dsonar.python.coverage.reportPaths=reports/coverage.xml
+            -Dsonar.python.mypy.reportPaths=reports/mypy.txt
             -Dsonar.tests=tests
             -Dsonar.python.version=3
             -Dsonar.sources=package_speedwagon
