@@ -79,6 +79,8 @@ tomli==2.0.1
     #   tox
 tox==4.18.0
     # via -r requirements/requirements-dev.txt
+types-pyinstaller==6.10.0.20240812
+    # via -r requirements/requirements-dev.txt
 typing-extensions==4.12.2
     # via mypy
 virtualenv==20.26.3
