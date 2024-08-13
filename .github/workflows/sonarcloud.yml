@@ -26,10 +26,10 @@ jobs:
             3.10
             3.11
             3.12
+      - name: Set up Python test environment
+        run: python -m pip install -r requirements-dev.txt
       - name: Run Python tests
-        run: |
-          python -m pip install -r requirements-dev.txt
-          tox run-parallel -e clean,py38,py39,py310,py311,py312,sonar_report
+        run: tox run-parallel -e clean,py38,py39,py310,py311,py312,sonar_report
       - name: Run MyPy
         run: |
           mypy package_speedwagon | tee reports/mypy.txt
