@@ -15,7 +15,7 @@ create_venv() {
     $base_python_path -m venv $venv_path
     . $venv_path/bin/activate
     python -m pip install pip --upgrade
-    python -m pip install $SCRIPT_PATH/requirements.txt
+    python -m pip install -r $SCRIPT_PATH/requirements.txt
     deactivate
 }
 
