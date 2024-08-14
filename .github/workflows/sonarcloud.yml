@@ -28,7 +28,11 @@ jobs:
             3.12
       - name: Set up Python test environment
         run: python -m pip install -r requirements-dev.txt
+        env:
+          PIP_EXTRA_INDEX_URL: ${{vars.PIP_EXTRA_INDEX_URL}}
       - name: Run Python tests
+        env:
+          PIP_EXTRA_INDEX_URL: ${{vars.PIP_EXTRA_INDEX_URL}}
         run: tox run-parallel -e clean,py38,py39,py310,py311,py312,sonar_report
       - name: Run MyPy
         run: |

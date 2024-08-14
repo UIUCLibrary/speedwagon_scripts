@@ -1,5 +1,4 @@
 """Packaging script for Speedwagon distribution with bundled plugins."""
-import abc
 import pathlib
 import shutil
 import sys
@@ -9,8 +8,9 @@ import venv
 import argparse
 import subprocess
 import os
-from typing import Optional, Callable, Dict
+from typing import Optional
 import zipfile
+from package_speedwagon import defaults, freeze
 
 if sys.version_info < (3, 10):
     import importlib_metadata as metadata
@@ -19,14 +19,6 @@ else:
 
 from package_speedwagon import installer
 
-import PyInstaller.__main__
-
-DEFAULT_BOOTSTRAP_SCRIPT =\
-    os.path.join(os.path.dirname(__file__), 'speedwagon-bootstrap.py')
-
-DEFAULT_APP_ICON = os.path.join(os.path.dirname(__file__), 'favicon.ico')
-DEFAULT_EXECUTABLE_NAME = 'speedwagon'
-DEFAULT_COLLECTION_NAME = 'Speedwagon!'
 
 SPEC_TEMPLATE = """# -*- mode: python ; coding: utf-8 -*-
 import os
@@ -66,7 +58,7 @@ exe = EXE(pyz,
           disable_windowed_traceback=False,
           target_arch=None,
           codesign_identity=None,
-          entitlements_file=None, 
+          entitlements_file=None,
           icon=%(app_icon)r)
 coll = COLLECT(exe,
                a.binaries,
@@ -86,10 +78,6 @@ app = BUNDLE(coll,
 
 """
 
-
-def get_default_app_icon() -> str:
-    """Get path to default icon for launching desktop application."""
-    return os.path.join(os.path.dirname(__file__), 'favicon.ico')
 
 
 class SetInstallerIconAction(argparse.Action):
@@ -195,14 +183,15 @@ def get_args_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--app-bootstrap-script",
         default=os.path.relpath(
-            os.path.normcase(DEFAULT_BOOTSTRAP_SCRIPT), start=os.getcwd()
+            os.path.normcase(defaults.DEFAULT_BOOTSTRAP_SCRIPT),
+            start=os.getcwd()
         ),
         help="Python script used to launch Speedwagon (default: %(default)s)"
     ),
     parser.add_argument(
         "--app-icon",
         default=pathlib.Path(
-            os.path.relpath(DEFAULT_APP_ICON, start=os.getcwd())
+            os.path.relpath(defaults.DEFAULT_APP_ICON, start=os.getcwd())
         ),
         action=AppIconValidate,
         type=pathlib.Path,
@@ -213,7 +202,7 @@ def get_args_parser() -> argparse.ArgumentParser:
         help="Name of application (default: %(default)s)"
     )
     parser.add_argument(
-        "--app-executable-name", default=DEFAULT_EXECUTABLE_NAME,
+        "--app-executable-name", default=defaults.DEFAULT_EXECUTABLE_NAME,
         help="Name of application executable file (default: %(default)s)"
     )
     parser.add_argument(
@@ -257,100 +246,6 @@ def create_virtualenv(
     except Exception:
         shutil.rmtree(build_path)
         raise
-
-
-def freeze_env(
-    specs_file: str,
-    build_path: str,
-    work_path: str,
-    dest: str
-) -> None:
-    """Freeze Python Environment."""
-    PyInstaller.__main__.run([
-        '--noconfirm',
-        specs_file,
-        "--distpath", dest,
-        "--workpath", work_path,
-        "--clean"
-    ])
-
-
-search_frozen_strategy = Callable[[str, argparse.Namespace], Optional[str]]
-
-
-def find_frozen_mac(
-    search_path: str,
-    args: argparse.Namespace
-) -> Optional[str]:
-    """Search strategy to location frozen Python application on MacOS.
-
-    Args:
-        search_path: starting path to search recursively
-        args: user args from CLI
-
-    Returns: Path to speedwagon application if found, else returns None.
-
-    """
-    for root, dirs, _ in os.walk(search_path):
-        for dir_name in dirs:
-            if dir_name != f"{args.app_name}.app":
-                continue
-            return os.path.join(root, dir_name)
-    return None
-
-
-def find_frozen_windows(
-    search_path: str,
-    _: argparse.Namespace
-) -> Optional[str]:
-    """Search strategy to location frozen Python application on Windows.
-
-    Args:
-        search_path: starting path to search recursively
-        _:
-
-    Returns: Path to speedwagon application if found, else returns None.
-
-    """
-    for root, dirs, __ in os.walk(search_path):
-        for dir_name in dirs:
-            if dir_name != DEFAULT_COLLECTION_NAME:
-                continue
-            path = os.path.join(root, dir_name)
-            for filename in os.listdir(path):
-                if not filename.endswith(".exe"):
-                    continue
-                if filename == "speedwagon.exe":
-                    return path
-    return None
-
-
-def find_frozen_folder(
-    search_path: str,
-    args: argparse.Namespace,
-    strategy: Optional[search_frozen_strategy] = None
-) -> Optional[str]:
-    """Locates the folder containing Frozen Speedwagon application.
-
-    Args:
-        search_path: path to search frozen folder recursively
-        args: cli args
-        strategy: searching strategy, if not selected explicitly, the strategy
-            is determined by system platform.
-
-    Returns: Path to the folder containing Frozen Speedwagon application if
-              found or None if not found.
-
-    """
-    strategies: Dict[str, search_frozen_strategy] = {
-        "win32": find_frozen_windows,
-        "darwin": find_frozen_mac
-    }
-    if strategy is None:
-        strategy = strategies.get(sys.platform)
-        if strategy is None:
-            raise ValueError(f"Unsupported platform: {sys.platform}")
-    return strategy(search_path, args)
 
 
 def get_package_metadata(
@@ -401,20 +296,6 @@ def get_package_top_level(package_file: pathlib.Path) -> str:
     raise ValueError("unknown File type")
 
 
-def create_hook_for_wheel(
-    path: str,
-    strategy: Callable[[], str]
-) -> None:
-    package_name = strategy()
-    template = """# Generated by package_speedwagon.py script
-from PyInstaller.utils.hooks import copy_metadata, collect_all
-datas, binaries, hiddenimports = collect_all('%(package_name)s')
-datas += copy_metadata('%(package_name)s', recursive=True)
-    """ % dict(package_name=package_name)
-    with open(os.path.join(path, f"hook-{package_name}.py"), "w") as fp:
-        fp.write(template)
-
-
 def main() -> None:
     args_parser = get_args_parser()
     args = args_parser.parse_args()
@@ -448,41 +329,36 @@ def main() -> None:
     additional_hooks_path = os.path.join(args.build_path, "hooks")
     if not os.path.exists(additional_hooks_path):
         os.makedirs(additional_hooks_path)
-
-    specs = {
-        "bootstrap_script": os.path.abspath(args.app_bootstrap_script),
-        "search_paths": [
-            package_env
-        ],
-        "collection_name": DEFAULT_COLLECTION_NAME,
-        "app_icon": os.path.abspath(args.app_icon),
-        "top_level_package_folder_name":
-            get_package_top_level(args.python_package_file),
-        "installer_icon": os.path.abspath(args.installer_icon),
-        "datas": data_files,
-        "bundle_name":
-            f"{args.app_name}.app" if sys.platform == "darwin"
-            else args.app_name,
-        "app_executable_name": args.app_executable_name,
-        'hookspath': [
-            os.path.abspath(os.path.dirname(__file__)),
-            os.path.abspath(additional_hooks_path)
-        ]
-    }
+    specs_file_generator = freeze.DefaultGenerateSpecs()
+    specs_file_generator.data.bootstrap_script = os.path.abspath(args.app_bootstrap_script)
+    specs_file_generator.data.app_executable_name = args.app_executable_name
+    specs_file_generator.data.data_files = data_files
+    specs_file_generator.data.collection_name = defaults.DEFAULT_COLLECTION_NAME
+    specs_file_generator.data.bundle_name =f"{args.app_name}.app" if sys.platform == "darwin" else args.app_name
+    specs_file_generator.data.app_icon = os.path.abspath(args.app_icon)
+    specs_file_generator.data.installer_icon = os.path.abspath(args.installer_icon)
+    specs_file_generator.data.top_level_package_folder_name = get_package_top_level(args.python_package_file)
+    specs_file_generator.data.hookspath =  [
+        os.path.abspath(os.path.dirname(__file__)),
+        os.path.abspath(additional_hooks_path)
+    ]
+    specs_file_generator.data.search_paths = [
+        package_env
+    ]
     with open(specs_file_name, "w", encoding="utf-8") as spec_file:
-        spec_file.write(SPEC_TEMPLATE % specs)
+        spec_file.write(specs_file_generator.generate())
 
-    create_hook_for_wheel(
+    freeze.create_hook_for_wheel(
         path=additional_hooks_path,
         strategy=lambda: get_package_top_level(args.python_package_file),
     )
-    freeze_env(
+    freeze.freeze_env(
         specs_file=specs_file_name,
         work_path=os.path.join(args.build_path, 'workpath'),
         build_path=package_env,
         dest=args.dist
     )
-    expected_frozen_path = find_frozen_folder(args.dist, args=args)
+    expected_frozen_path = freeze.find_frozen_folder(args.dist, args=args)
     if not expected_frozen_path:
         raise FileNotFoundError(
             "Unable to find folder containing frozen application"
