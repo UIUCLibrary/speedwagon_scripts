@@ -30,7 +30,7 @@ goto:end_args
 :create_venv
     %PYTHON_EXEC_PATH% -m venv %BUILD_VENV%
     %BUILD_VENV%\Scripts\python -m pip install pip --upgrade
-    %BUILD_VENV%\Scripts\python -m pip install PyInstaller cmake
+    %BUILD_VENV%\Scripts\python -m pip install -r %~dp0\requirements.txt
     goto :eof
 
 :create_standalone
