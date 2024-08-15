@@ -10,9 +10,42 @@ permissions:
   pull-requests: read # allows SonarCloud to decorate PRs with analysis results
 
 jobs:
+  Tox:
+    strategy:
+      matrix:
+        python_version: [8,9,10,11,12]
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.${{ matrix.python_version}}
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - name: Set up Python test environment
+        run: python -m pip install -r requirements-dev.txt
+        env:
+          PIP_EXTRA_INDEX_URL: ${{vars.PIP_EXTRA_INDEX_URL}}
+      - name: Run Python tests
+        env:
+          PIP_EXTRA_INDEX_URL: ${{vars.PIP_EXTRA_INDEX_URL}}
+        run: tox run -e py3${{ matrix.python_version}},sonar_report
+      - name: Temporarily save coverage data
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-coverage-${{ matrix.os }}-py3.${{matrix.python_version}}
+          path: .tox/.tmp/.coverage
+          retention-days: 1
+
   Analysis:
     runs-on: ubuntu-latest
-
+    needs: Tox
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,10 +63,16 @@ jobs:
         run: python -m pip install -r requirements-dev.txt
         env:
           PIP_EXTRA_INDEX_URL: ${{vars.PIP_EXTRA_INDEX_URL}}
-      - name: Run Python tests
-        env:
-          PIP_EXTRA_INDEX_URL: ${{vars.PIP_EXTRA_INDEX_URL}}
-        run: tox run-parallel -e clean,py38,py39,py310,py311,py312,sonar_report
+      - name: Retrieve coverage data
+        uses: actions/download-artifact@v4
+        with:
+          pattern: python-coverage-*
+          path: coverage-data/
+      - name: Combine coverage data
+        run: | 
+          find coverage-data/ -name '.coverage'  -exec coverage combine --data-file=.coverage {} \;
+          coverage report --data-file=.coverage -i --omit *.spec
+          coverage xml --omit *.spec --data-file=.coverage -o reports/coverage.xml
       - name: Run MyPy
         run: |
           mypy package_speedwagon | tee reports/mypy.txt

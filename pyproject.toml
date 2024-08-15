@@ -9,3 +9,5 @@ extend-select = ["E501"]
 markers =[
     "slow: mark test as slow."
 ]
+[tool.coverage.run]
+omit = ["*.spec"]
