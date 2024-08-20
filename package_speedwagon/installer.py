@@ -17,7 +17,7 @@ from typing import (
     Optional,
     Sequence,
     Type,
-    Union,
+    Union
 )
 
 if sys.version_info < (3, 10):
@@ -32,11 +32,13 @@ else:
 
 import cmake
 
+__all__ = ['cpack_config_generators']
+
 
 def get_license(
-        strategies_list: List[Callable[[], Optional[str]]] = None
+    strategies_list: Optional[List[Callable[[], Optional[str]]]] = None
 ) -> str:
-    for strategy in strategies_list:
+    for strategy in strategies_list if strategies_list is not None else []:
         result = strategy()
         if result is None:
             continue
@@ -58,6 +60,7 @@ class LocateLicenseFile:
                 os.path.join(search_path, self.potential_file_name)
             if os.path.exists(potential_file):
                 return potential_file
+        return None
 
     def __call__(self):
         license_file = self.locate_license_file()
@@ -189,7 +192,7 @@ set(CPACK_RESOURCE_FILE_LICENSE "%(cpack_resource_file_license)s")
 set(CPACK_PACKAGE_DESCRIPTION_FILE "%(cpack_package_description_file)s")
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "Speedwagon - UIUC")
 set(CPACK_PACKAGE_EXECUTABLES "speedwagon" "%(app_name)s")
-"""
+"""  # noqa: E501
 
     def get_cpack_package_file_name(
         self,
@@ -202,7 +205,7 @@ set(CPACK_PACKAGE_EXECUTABLES "speedwagon" "%(app_name)s")
                 "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}"
                 f".dev{version.dev}"
             )
-        prerelease = ''.join(map(str, version.pre))
+        prerelease = ''.join(map(str, version.pre if version.pre else []))
         return "${CPACK_PACKAGE_NAME}-" \
                "${CPACK_PACKAGE_VERSION}." f"{prerelease}" \
                "-${CPACK_SYSTEM_NAME}"  # noqa: E501
@@ -239,7 +242,7 @@ set(CPACK_PACKAGE_EXECUTABLES "speedwagon" "%(app_name)s")
     def _get_first_author_from_package_metadata(
             package_metadata: metadata.PackageMetadata
     ) -> str:
-        author_email: Union[str, List[str]] = package_metadata.json.get(
+        author_email: Union[str, List[str]] = package_metadata.get_all(
             'author_email', ''
         )
         if isinstance(author_email, list):
@@ -260,12 +263,6 @@ set(CPACK_PACKAGE_EXECUTABLES "speedwagon" "%(app_name)s")
             version.minor,
             version.micro
         )
-        if version.is_devrelease:
-            tweak = str(version.dev)
-        elif version.is_prerelease:
-            tweak = ''.join(map(str, version.pre))
-        else:
-            tweak = None
         try:
             license_path = self.get_license_path()
         except FileNotFoundError:
@@ -305,20 +302,24 @@ set(CPACK_PACKAGE_EXECUTABLES "speedwagon" "%(app_name)s")
         return CPackGenerator.general_cpack_template % specs
 
 
-def read_toml_data(toml_config_file: pathlib.Path) -> Dict[str, Any]:
+def read_toml_data(
+    toml_config_file: pathlib.Path,
+    loader=tomllib.load
+) -> Dict[str, Any]:
     """Read contents of toml file.
 
     Args:
         toml_config_file: path to toml config file.
+        loader: toml loader function.
 
     Returns: contents of toml file
 
     """
     with open(toml_config_file, "rb") as f:
-        return tomllib.load(f)
+        return loader(f)
 
 
-class WindowsPackageGenerator(CPackGenerator):
+class WixToolsetPackageGenerator(CPackGenerator):
     """Windows Package Generator.
 
     Uses Wix toolset to generate msi file.
@@ -328,15 +329,23 @@ set(CPACK_WIX_SIZEOF_VOID_P "%(cpack_wix_sizeof_void_p)s")
 set(CPACK_WIX_ARCHITECTURE "%(cpack_wix_architecture)s")
 """
 
-    def get_license_path(self) -> str:
+    @property
+    def default_license_find_strategies(self):
         expected_license_file = os.path.join(self.output_path, "LICENSE.txt")
-        strategies = [
+        return [
             CopyLicenseFile(
                 source_file='LICENSE',
                 output_file=expected_license_file
             ),
             GenerateNoLicenseGivenFile(expected_license_file),
         ]
+
+    def get_license_path(
+        self,
+        strategies: Optional[List[Callable[[], Optional[str]]]] = None
+    ) -> str:
+        if strategies is None:
+            strategies = self.default_license_find_strategies
         return get_license(strategies)
 
     def cpack_generator_name(self) -> str:
@@ -371,19 +380,31 @@ set(CPACK_WIX_ARCHITECTURE "%(cpack_wix_architecture)s")
             {}
         )
 
+    @staticmethod
+    def get_wix_specific_configs(architecture=platform.architecture()):
+
+        if architecture[0] == '64bit':
+            return {
+                "cpack_wix_architecture": "x64",
+                "cpack_wix_sizeof_void_p": "8"
+            }
+        elif architecture[0] == '32bit':
+            return {
+                "cpack_wix_sizeof_void_p": "4",
+                "cpack_wix_architecture": "x86",
+            }
+        return {
+            "cpack_wix_sizeof_void_p": None,
+            "cpack_wix_architecture": None,
+        }
+
     def package_specific_config_lines(self) -> str:
-        if platform.architecture()[0] == '64bit':
-            cpack_wix_architecture = "x64"
-            cpack_wix_sizeof_void_p = "8"
-        elif platform.architecture()[0] == '32bit':
-            cpack_wix_sizeof_void_p = "4"
-            cpack_wix_architecture = "x86"
-        else:
-            cpack_wix_architecture = ""
-            cpack_wix_sizeof_void_p = ""
+        cpack_wix_specs = self.get_wix_specific_configs()
         required_specs = {
-            "cpack_wix_architecture": cpack_wix_architecture,
-            "cpack_wix_sizeof_void_p": cpack_wix_sizeof_void_p,
+            "cpack_wix_architecture":
+                cpack_wix_specs['cpack_wix_architecture'],
+            "cpack_wix_sizeof_void_p":
+                cpack_wix_specs['cpack_wix_sizeof_void_p'],
         }
         package_data = self.get_pyproject_toml_metadata_windows_packager_data()
         optional_lines = []
@@ -403,14 +424,14 @@ set(CPACK_WIX_ARCHITECTURE "%(cpack_wix_architecture)s")
 
         return "\n".join(
             [
-                WindowsPackageGenerator.wix_cpack_template % required_specs,
+                WixToolsetPackageGenerator.wix_cpack_template % required_specs,
                 '\n'.join(optional_lines),
                 ''
             ]
         )
 
 
-class MacOSPackageGenerator(CPackGenerator):
+class MacOSDragNDropPackageGenerator(CPackGenerator):
     """Generate Mac installer package."""
 
     def cpack_generator_name(self) -> str:
@@ -435,44 +456,16 @@ class MacOSPackageGenerator(CPackGenerator):
                 f"-{system}"
             )
 
-        prerelease = ''.join(map(str, version.pre))
+        prerelease = ''.join(map(str, version.pre if version.pre else []))
         return "${CPACK_PACKAGE_NAME}-" \
                "${CPACK_PACKAGE_VERSION}." f"{prerelease}-" \
                f"{system}"  # noqa: E501
 
 
-def write_cpack_config_file(
-        frozen_application_path: str,
-        destination_path: str,
-        package_metadata: metadata.PackageMetadata,
-        app_name: str,
-        cl_args: argparse.Namespace,
-) -> str:
-    """Generate a CPackConfig.cmake file for packaging with cpack command."""
-    generators: Dict[str, Type[CPackGenerator]] = {
-        'win32': WindowsPackageGenerator,
-        'darwin': MacOSPackageGenerator
-    }
-    generator_klass = generators.get(sys.platform)
-    if generator_klass is None:
-        raise ValueError(f"Unsupported platform '{sys.platform}'")
-    generator = generator_klass(
-        app_name,
-        frozen_application_path=frozen_application_path,
-        output_path=destination_path,
-        package_metadata=package_metadata,
-        cl_args=cl_args
-    )
-    generator.package_vendor = \
-        (
-            'University Library at The University of Illinois at Urbana '
-            'Champaign: Preservation Services'
-        )
-    cpack_config_file = os.path.join(destination_path, "CPackConfig.cmake")
-    with open(cpack_config_file, "w") as f:
-        f.write(generator.generate())
-
-    return cpack_config_file
+cpack_config_generators: Dict[str, Type[CPackGenerator]] = {
+    'DragNDrop': MacOSDragNDropPackageGenerator,
+    'Wix': WixToolsetPackageGenerator
+}
 
 
 def locate_cpack_on_path_env_var() -> str:
@@ -503,8 +496,14 @@ def locate_cpack_in_python_packages() -> str:
     return cpack_cmd
 
 
+DEFAULT_CPACK_FINDING_STRATEGIES = [
+    locate_cpack_on_path_env_var,
+    locate_cpack_in_python_packages
+]
+
+
 def get_cpack_path(
-        strategies: Optional[List[Callable[[], str]]] = None
+    strategies: Optional[List[Callable[[], str]]] = None
 ) -> str:
     """Locate CPack executable.
 
@@ -521,10 +520,7 @@ def get_cpack_path(
 
     """
     if strategies is None:
-        strategies = [
-            locate_cpack_on_path_env_var,
-            locate_cpack_in_python_packages
-        ]
+        strategies = DEFAULT_CPACK_FINDING_STRATEGIES
     for strategy in strategies:
         try:
             return strategy()
@@ -550,22 +546,3 @@ def run_cpack(
     ]
     cpack_cmd = get_cpack_path()
     subprocess.check_call([cpack_cmd] + args)
-
-
-def create_installer(
-        frozen_application_path: str,
-        dest: str,
-        package_metadata: metadata.PackageMetadata,
-        app_name: str,
-        build_path: str,
-        cl_args: argparse.Namespace,
-) -> None:
-    """Create OS specific system installer package."""
-    config_file = write_cpack_config_file(
-        frozen_application_path,
-        build_path,
-        package_metadata,
-        app_name,
-        cl_args
-    )
-    run_cpack(config_file)

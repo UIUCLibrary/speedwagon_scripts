@@ -1,4 +1,5 @@
 """Packaging script for Speedwagon distribution with bundled plugins."""
+import abc
 import pathlib
 import shutil
 import sys
@@ -8,76 +9,15 @@ import venv
 import argparse
 import subprocess
 import os
-from typing import Optional
+from typing import Optional, Mapping, Type
 import zipfile
-from package_speedwagon import defaults, freeze
+
+from package_speedwagon import defaults, freeze, installer
 
 if sys.version_info < (3, 10):
     import importlib_metadata as metadata
 else:
     from importlib import metadata
-
-from package_speedwagon import installer
-
-
-SPEC_TEMPLATE = """# -*- mode: python ; coding: utf-8 -*-
-import os
-import sys
-try:  # pragma: no cover
-    from importlib import metadata
-except ImportError:  # pragma: no cover
-    import importlib_metadata as metadata  # type: ignore
-
-block_cipher = None
-a = Analysis([%(bootstrap_script)r],
-             pathex=%(search_paths)s,
-             binaries=[],
-             datas=%(datas)s,
-             hiddenimports=['%(top_level_package_folder_name)s'],
-             hookspath=[os.path.join(workpath, ".."), SPECPATH] + %(hookspath)s,
-             hooksconfig={},
-             runtime_hooks=[],
-             excludes=[],
-             win_no_prefer_redirects=False,
-             win_private_assemblies=False,
-             cipher=block_cipher,
-             noarchive=True)
-pyz = PYZ(a.pure, a.zipped_data,
-             cipher=block_cipher)
-
-exe = EXE(pyz,
-          a.scripts,
-          [],
-          exclude_binaries=True,
-          name='%(app_executable_name)s',
-          debug=True,
-          bootloader_ignore_signals=False,
-          strip=False,
-          upx=True,
-          console=False,
-          disable_windowed_traceback=False,
-          target_arch=None,
-          codesign_identity=None,
-          entitlements_file=None,
-          icon=%(app_icon)r)
-coll = COLLECT(exe,
-               a.binaries,
-               a.zipfiles,
-               a.datas,
-               strip=False,
-               upx=True,
-               upx_exclude=[],
-               name='%(collection_name)s')
-pkg_metadata = metadata.metadata("speedwagon")
-
-app = BUNDLE(coll,
-             name='%(bundle_name)s',
-             version=pkg_metadata['Version'],
-             icon=%(installer_icon)r,
-             bundle_identifier=None)
-
-"""
-
 
 
 class SetInstallerIconAction(argparse.Action):
@@ -154,32 +94,38 @@ def get_args_parser() -> argparse.ArgumentParser:
         action=ValidatePackage,
         help="wheel or source distribution package"
     )
+
     parser.add_argument(
         "--force-rebuild",
         action='store_true',
         help="force application environment to be rebuilt"
-    ),
+    )
+
     parser.add_argument(
         "--build-path",
         default=os.path.join("build", "packaging"),
         help="path to build directory (default: %(default)s)"
     )
+
     parser.add_argument(
         "--dist",
         default="dist",
         help='output path directory (default: %(default)s)'
     )
+
     default_installer_icon =\
         os.path.join(os.path.dirname(__file__), 'favicon.icns') \
         if sys.platform == "darwin" \
         else os.path.join(os.path.dirname(__file__), 'favicon.ico')
+
     parser.add_argument(
         "--installer-icon",
         default=os.path.relpath(default_installer_icon, start=os.getcwd()),
         type=pathlib.Path,
         action=SetInstallerIconAction,
         help='icon used by installer (default: %(default)s)'
-    ),
+    )
+
     parser.add_argument(
         "--app-bootstrap-script",
         default=os.path.relpath(
@@ -187,7 +133,8 @@ def get_args_parser() -> argparse.ArgumentParser:
             start=os.getcwd()
         ),
         help="Python script used to launch Speedwagon (default: %(default)s)"
-    ),
+    )
+
     parser.add_argument(
         "--app-icon",
         default=pathlib.Path(
@@ -196,15 +143,18 @@ def get_args_parser() -> argparse.ArgumentParser:
         action=AppIconValidate,
         type=pathlib.Path,
         help="Application icon (default: %(default)s)"
-    ),
+    )
+
     parser.add_argument(
         "--app-name", default="Speedwagon",
         help="Name of application (default: %(default)s)"
     )
+
     parser.add_argument(
         "--app-executable-name", default=defaults.DEFAULT_EXECUTABLE_NAME,
         help="Name of application executable file (default: %(default)s)"
     )
+
     parser.add_argument(
         "-r", "--requirement",
         action='append',
@@ -213,12 +163,7 @@ def get_args_parser() -> argparse.ArgumentParser:
              'Install from the given requirements file. '
              'This option can be used multiple times.'
     )
-    parser.add_argument(
-        "--config-file",
-        # default="pyproject.toml",
-        type=pathlib.Path,
-        help="config file"
-    )
+
     return parser
 
 
@@ -296,6 +241,289 @@ def get_package_top_level(package_file: pathlib.Path) -> str:
     raise ValueError("unknown File type")
 
 
+class AbsFreezeConfigGenerator(abc.ABC):
+    @abc.abstractmethod
+    def build_specs(self, user_args: argparse.Namespace) -> freeze.SpecsData:
+        """Build specs dataclass from the user_args."""
+
+    @abc.abstractmethod
+    def generate_freeze_config(self, specs: freeze.SpecsData) -> str:
+        """Generate the string data from the specs dataclass."""
+
+
+def generate_config_file_string(
+        source_application_path: str,
+        args: argparse.Namespace,
+        generator_type: Type[installer.CPackGenerator]
+) -> str:
+    generator = generator_type(
+        args.app_name,
+        frozen_application_path=source_application_path,
+        output_path=args.dist,
+        package_metadata=get_package_metadata(args.python_package_file),
+        cl_args=args
+    )
+
+    generator.package_vendor = defaults.DEFAULT_PACKAGE_VENDOR_STRING
+    return generator.generate()
+
+
+class AbsPlatformPackager(abc.ABC):
+    @abc.abstractmethod
+    def generate_config_file(
+        self,
+        source_application_path: str,
+        args: argparse.Namespace
+    ) -> pathlib.Path:
+        """Generate config file for packaging."""
+
+    @abc.abstractmethod
+    def create_system_package(
+        self,
+        config_file: pathlib.Path,
+        output_path: pathlib.Path = pathlib.Path("dist")
+    ) -> pathlib.Path:
+        """Create a system package."""
+
+
+class AppleDMGPlatformPackager(AbsPlatformPackager):
+
+    def generate_config_file(
+        self,
+        source_application_path: str,
+        args: argparse.Namespace
+    ) -> pathlib.Path:
+        cpack_config_file = os.path.join(args.dist, "CPackConfig.cmake")
+        with open(cpack_config_file, "w") as f:
+            f.write(
+                generate_config_file_string(
+                    source_application_path,
+                    args,
+                    installer.cpack_config_generators['DragNDrop']
+                )
+            )
+        return pathlib.Path(cpack_config_file)
+
+    @staticmethod
+    def locate_installer_artifact(path: pathlib.Path) -> pathlib.Path:
+        for i in os.scandir(path):
+            if i.is_dir():
+                continue
+            if i.name.endswith(".dmg"):
+                return pathlib.Path(i.path)
+        raise FileNotFoundError(f"No dmg file in {path}")
+
+    def create_system_package(
+        self,
+        config_file: pathlib.Path,
+        output_path: pathlib.Path = pathlib.Path("dist")
+    ) -> pathlib.Path:
+        installer.run_cpack(str(config_file), str(output_path))
+        try:
+            return self.locate_installer_artifact(output_path)
+        except FileNotFoundError as error:
+            raise FileNotFoundError(
+                f"No dmg found for {config_file}"
+            ) from error
+
+
+class AbsConfigFactory(abc.ABC):
+    @abc.abstractmethod
+    def get_freeze_config_generator(self) -> AbsFreezeConfigGenerator:
+        """Create a freeze config."""
+
+    @abc.abstractmethod
+    def get_application_packager(self) -> AbsPlatformPackager:
+        """Create a platform specific application packager."""
+
+
+class WindowsFreezeConfigGenerator(AbsFreezeConfigGenerator):
+
+    SpecsDataClass = freeze.DefaultGenerateSpecs.SpecsDataClass
+    FreezeConfigClass = freeze.DefaultGenerateSpecs
+
+    def __init__(self):
+        super().__init__()
+        self.python_package_file = None
+        self.additional_hooks_path = None
+
+    def build_specs(self, user_args: argparse.Namespace) -> freeze.SpecsData:
+        package_env = os.path.join(user_args.build_path, "speedwagon")
+        logo =\
+            os.path.abspath(
+                os.path.join(package_env, "speedwagon", 'logo.png')
+            )
+        data_files = [
+            (
+                os.path.abspath(user_args.app_icon).replace(os.sep, '/'),
+                'speedwagon'
+            ),
+            (logo, 'speedwagon'),
+        ]
+
+        self.additional_hooks_path =\
+            os.path.join(user_args.build_path, "hooks")
+
+        self.python_package_file = user_args.python_package_file
+
+        specs = self.SpecsDataClass(
+            bootstrap_script=os.path.abspath(user_args.app_bootstrap_script),
+            app_executable_name=user_args.app_executable_name,
+            data_files=data_files,
+            collection_name=defaults.DEFAULT_COLLECTION_NAME,
+            bundle_name=user_args.app_name,
+            app_icon=os.path.abspath(user_args.app_icon),
+            installer_icon=os.path.abspath(user_args.installer_icon),
+            top_level_package_folder_name=get_package_top_level(
+                user_args.python_package_file
+            ),
+            hookspath=[
+                os.path.abspath(os.path.dirname(__file__)),
+                os.path.abspath(self.additional_hooks_path)
+            ],
+            search_paths=[package_env],
+        )
+        return specs
+
+    def generate_freeze_config(self, specs: freeze.SpecsData) -> str:
+        if self.additional_hooks_path is None:
+            raise ValueError("No hooks path specified")
+
+        if not os.path.exists(self.additional_hooks_path):
+            os.makedirs(self.additional_hooks_path)
+
+        freeze.create_hook_for_wheel(
+            path=self.additional_hooks_path,
+            strategy=lambda: get_package_top_level(self.python_package_file),
+        )
+        specs_file_generator = self.FreezeConfigClass(specs)
+        return specs_file_generator.generate()
+
+
+class MacFreezeConfigGenerator(AbsFreezeConfigGenerator):
+    SpecsDataClass = freeze.DefaultGenerateSpecs.SpecsDataClass
+    FreezeConfigClass = freeze.DefaultGenerateSpecs
+
+    def __init__(self):
+        super().__init__()
+        self.python_package_file = None
+        self.additional_hooks_path = None
+
+    def build_specs(self, user_args: argparse.Namespace) -> freeze.SpecsData:
+        package_env = os.path.join(user_args.build_path, "speedwagon")
+        logo = os.path.abspath(
+            os.path.join(package_env, "speedwagon", 'logo.png')
+        )
+        data_files = [
+            (
+                os.path.abspath(user_args.app_icon).replace(os.sep, '/'),
+                'speedwagon'),
+            (logo, 'speedwagon'),
+        ]
+        self.additional_hooks_path = os.path.join(
+            user_args.build_path,
+            "hooks"
+        )
+        self.python_package_file = user_args.python_package_file
+
+        specs = self.SpecsDataClass(
+            bootstrap_script=os.path.abspath(user_args.app_bootstrap_script),
+            app_executable_name=user_args.app_executable_name,
+            data_files=data_files,
+            collection_name=defaults.DEFAULT_COLLECTION_NAME,
+            bundle_name=f"{user_args.app_name}.app",
+            app_icon=os.path.abspath(user_args.app_icon),
+            installer_icon=os.path.abspath(user_args.installer_icon),
+            top_level_package_folder_name=get_package_top_level(
+                user_args.python_package_file
+            ),
+            hookspath=[
+                os.path.abspath(os.path.dirname(__file__)),
+                os.path.abspath(self.additional_hooks_path)
+            ],
+            search_paths=[package_env],
+        )
+        return specs
+
+    def generate_freeze_config(self, specs: freeze.SpecsData) -> str:
+        if self.additional_hooks_path is None:
+            raise ValueError("No hooks path specified")
+
+        if not os.path.exists(self.additional_hooks_path):
+            os.makedirs(self.additional_hooks_path)
+
+        freeze.create_hook_for_wheel(
+            path=self.additional_hooks_path,
+            strategy=lambda: get_package_top_level(self.python_package_file),
+        )
+        specs_file_generator = self.FreezeConfigClass(specs)
+        return specs_file_generator.generate()
+
+
+class MSIPlatformPackager(AbsPlatformPackager):
+
+    def generate_config_file(
+        self,
+        source_application_path: str,
+        args: argparse.Namespace
+    ) -> pathlib.Path:
+
+        cpack_config_file = os.path.join(args.dist, "CPackConfig.cmake")
+        with open(cpack_config_file, "w") as f:
+            f.write(
+                generate_config_file_string(
+                    source_application_path,
+                    args,
+                    installer.cpack_config_generators['Wix']
+                )
+            )
+        return pathlib.Path(cpack_config_file)
+
+    @staticmethod
+    def locate_installer_artifact(path: pathlib.Path) -> pathlib.Path:
+        for i in os.scandir(path):
+            if i.is_dir():
+                continue
+            if i.name.endswith(".msi"):
+                return pathlib.Path(i.path)
+        raise FileNotFoundError(f"No .msi found in {path}")
+
+    def create_system_package(
+        self,
+        config_file: pathlib.Path,
+        output_path: pathlib.Path = pathlib.Path("dist")
+    ) -> pathlib.Path:
+        installer.run_cpack(str(config_file), str(output_path))
+        try:
+            return self.locate_installer_artifact(output_path)
+        except FileNotFoundError as error:
+            raise FileNotFoundError(
+                f"No .msi found for {config_file}"
+            ) from error
+
+
+class WindowsConfigFactory(AbsConfigFactory):
+    def get_freeze_config_generator(self) -> AbsFreezeConfigGenerator:
+        return WindowsFreezeConfigGenerator()
+
+    def get_application_packager(self) -> AbsPlatformPackager:
+        return MSIPlatformPackager()
+
+
+class MacConfigFactory(AbsConfigFactory):
+    def get_freeze_config_generator(self) -> AbsFreezeConfigGenerator:
+        return MacFreezeConfigGenerator()
+
+    def get_application_packager(self) -> AbsPlatformPackager:
+        return AppleDMGPlatformPackager()
+
+
+config_os_mappings: Mapping[str, AbsConfigFactory] = {
+    "darwin": MacConfigFactory(),
+    "win32": WindowsConfigFactory()
+}
+
+
 def main() -> None:
     args_parser = get_args_parser()
     args = args_parser.parse_args()
@@ -321,41 +549,21 @@ def main() -> None:
         )
 
     specs_file_name = os.path.join(args.build_path, "specs.spec")
-    logo = os.path.abspath(os.path.join(package_env, "speedwagon", 'logo.png'))
-    data_files = [
-        (os.path.abspath(args.app_icon).replace(os.sep, '/'), 'speedwagon'),
-        (logo, 'speedwagon'),
-    ]
-    additional_hooks_path = os.path.join(args.build_path, "hooks")
-    if not os.path.exists(additional_hooks_path):
-        os.makedirs(additional_hooks_path)
-    specs_file_generator = freeze.DefaultGenerateSpecs()
-    specs_file_generator.data.bootstrap_script = os.path.abspath(args.app_bootstrap_script)
-    specs_file_generator.data.app_executable_name = args.app_executable_name
-    specs_file_generator.data.data_files = data_files
-    specs_file_generator.data.collection_name = defaults.DEFAULT_COLLECTION_NAME
-    specs_file_generator.data.bundle_name =f"{args.app_name}.app" if sys.platform == "darwin" else args.app_name
-    specs_file_generator.data.app_icon = os.path.abspath(args.app_icon)
-    specs_file_generator.data.installer_icon = os.path.abspath(args.installer_icon)
-    specs_file_generator.data.top_level_package_folder_name = get_package_top_level(args.python_package_file)
-    specs_file_generator.data.hookspath =  [
-        os.path.abspath(os.path.dirname(__file__)),
-        os.path.abspath(additional_hooks_path)
-    ]
-    specs_file_generator.data.search_paths = [
-        package_env
-    ]
-    with open(specs_file_name, "w", encoding="utf-8") as spec_file:
-        spec_file.write(specs_file_generator.generate())
+    config_generator = config_os_mappings.get(sys.platform)
+    if config_generator is None:
+        raise ValueError(f"Unsupported platform: {sys.platform}")
+    freeze_config_generator = config_generator.get_freeze_config_generator()
 
-    freeze.create_hook_for_wheel(
-        path=additional_hooks_path,
-        strategy=lambda: get_package_top_level(args.python_package_file),
-    )
+    with open(specs_file_name, "w", encoding="utf-8") as spec_file:
+        spec_file.write(
+            freeze_config_generator.generate_freeze_config(
+                freeze_config_generator.build_specs(args)
+            )
+        )
+
     freeze.freeze_env(
         specs_file=specs_file_name,
         work_path=os.path.join(args.build_path, 'workpath'),
-        build_path=package_env,
         dest=args.dist
     )
     expected_frozen_path = freeze.find_frozen_folder(args.dist, args=args)
@@ -363,15 +571,15 @@ def main() -> None:
         raise FileNotFoundError(
             "Unable to find folder containing frozen application"
         )
-
-    installer.create_installer(
-        expected_frozen_path,
-        args.dist,
-        get_package_metadata(args.python_package_file),
-        app_name=args.app_name,
-        build_path=args.build_path,
-        cl_args=args,
+    platform_packager = config_generator.get_application_packager()
+    packaging_config_file = platform_packager.generate_config_file(
+        source_application_path=expected_frozen_path,
+        args=args
     )
+    package_file =\
+        platform_packager.create_system_package(packaging_config_file)
+
+    print(f"Created {package_file}")
 
 
 if __name__ == '__main__':

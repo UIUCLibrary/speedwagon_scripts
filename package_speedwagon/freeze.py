@@ -14,11 +14,11 @@ from package_speedwagon.defaults import DEFAULT_COLLECTION_NAME
 
 def freeze_env(
     specs_file: str,
-    build_path: str,
     work_path: str,
     dest: str
 ) -> None:
     """Freeze Python Environment."""
+
     PyInstaller.__main__.run([
         '--noconfirm',
         specs_file,
@@ -78,6 +78,12 @@ def find_frozen_windows(
     return None
 
 
+default_search_frozen_strategy_mapping: Dict[str, search_frozen_strategy] = {
+    "win32": find_frozen_windows,
+    "darwin": find_frozen_mac
+}
+
+
 def find_frozen_folder(
     search_path: str,
     args: argparse.Namespace,
@@ -95,12 +101,8 @@ def find_frozen_folder(
               found or None if not found.
 
     """
-    strategies: Dict[str, search_frozen_strategy] = {
-        "win32": find_frozen_windows,
-        "darwin": find_frozen_mac
-    }
     if strategy is None:
-        strategy = strategies.get(sys.platform)
+        strategy = default_search_frozen_strategy_mapping.get(sys.platform)
         if strategy is None:
             raise ValueError(f"Unsupported platform: {sys.platform}")
     return strategy(search_path, args)
@@ -252,7 +254,7 @@ app = BUNDLE(coll,
              icon=%(installer_icon)r,
              bundle_identifier=None)
 
-"""
+"""  # noqa: E501
     SpecsDataClass = SpecsData
     key_mapping = {
         "data_files": "datas",

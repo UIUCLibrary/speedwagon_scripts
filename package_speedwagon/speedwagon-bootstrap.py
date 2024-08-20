@@ -1,6 +1,7 @@
 import sys
 from multiprocessing import freeze_support
 
+
 def main():
     import speedwagon.startup
     speedwagon.startup.main()
