@@ -40,7 +40,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: python-coverage-${{ matrix.os }}-py3.${{matrix.python_version}}
-          path: .tox/.tmp/.coverage
+          path: .tox/.tmp/.coverage.*
           retention-days: 1
 
   Analysis:
@@ -68,11 +68,18 @@ jobs:
         with:
           pattern: python-coverage-*
           path: coverage-data/
+          merge-multiple: true
       - name: Combine coverage data
         run: | 
-          find coverage-data/ -name '.coverage'  -exec coverage combine --data-file=.coverage {} \;
+          coverage combine  --data-file=.coverage coverage-data/
           coverage report --data-file=.coverage -i --omit *.spec
           coverage xml --omit *.spec --data-file=.coverage -o reports/coverage.xml
+      - name: Save combined coverage data
+        uses: actions/upload-artifact@v4
+        with:
+          name: combined-coverage-data
+          path: reports/coverage.xml
+          retention-days: 1
       - name: Run MyPy
         run: |
           mypy package_speedwagon | tee reports/mypy.txt
