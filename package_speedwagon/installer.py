@@ -208,13 +208,17 @@ set(CPACK_PACKAGE_EXECUTABLES "speedwagon" "%(app_name)s")
 
     def get_license_path(self) -> str:
         """Get path to License file."""
-        expected_license_file = os.path.join(self.output_path, "LICENSE")
-        return get_license(
-            strategies_list=[
+        strategy_attempt_order: List[Callable[[], Optional[str]]]
+        if self.license_file is not None:
+            strategy_attempt_order = [lambda: str(self.license_file)]
+        else:
+            strategy_attempt_order = [
                 LocateLicenseFile(),
-                GenerateNoLicenseGivenFile(expected_license_file)
+                GenerateNoLicenseGivenFile(
+                    os.path.join(self.output_path, "LICENSE")
+                )
             ]
-        )
+        return get_license(strategies_list=strategy_attempt_order)
 
     def __init__(
             self,
@@ -233,6 +237,7 @@ set(CPACK_PACKAGE_EXECUTABLES "speedwagon" "%(app_name)s")
             pathlib.Path('pyproject.toml')
 
         self.command_line_args = cl_args
+        self.license_file: Optional[pathlib.Path] = None
 
     @staticmethod
     def _get_first_author_from_package_metadata(
@@ -260,7 +265,10 @@ set(CPACK_PACKAGE_EXECUTABLES "speedwagon" "%(app_name)s")
             version.micro
         )
         try:
-            license_path = self.get_license_path()
+            if self.license_file is None:
+                license_path = self.get_license_path()
+            else:
+                license_path = str(self.license_file)
         except FileNotFoundError:
             license_path = os.path.join(self.output_path, "LICENSE")
             with open(license_path, 'w') as f:

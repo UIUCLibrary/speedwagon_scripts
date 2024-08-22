@@ -465,6 +465,7 @@ def test_run_cpack(monkeypatch):
         ["cpack", "--config", "config_file.cmake", "-B", "this/path"]
     )
 
+
 def test_generate_package_description_file():
     package_metadata =\
         Mock(name='package_metadata', get_all=Mock(return_value=["some data"]))

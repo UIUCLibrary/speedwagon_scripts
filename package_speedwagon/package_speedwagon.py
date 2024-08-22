@@ -1,5 +1,6 @@
 """Packaging script for Speedwagon distribution with bundled plugins."""
 import abc
+import logging
 import pathlib
 import shutil
 import sys
@@ -9,9 +10,8 @@ import venv
 import argparse
 import subprocess
 import os
-from typing import Optional, Mapping, Type
+from typing import Optional, Mapping, Type, List, Callable
 import zipfile
-
 from package_speedwagon import defaults, freeze, installer, utils
 
 if sys.version_info < (3, 10):
@@ -23,6 +23,8 @@ if sys.version_info < (3, 11):
     from pip._vendor import tomli as tomllib
 else:
     import tomllib
+
+logger = logging.getLogger(__name__)
 
 
 class SetInstallerIconAction(argparse.Action):
@@ -76,6 +78,14 @@ class ValidatePackage(argparse.Action):
 
 
 class TomlFileAction(argparse.Action):
+    @staticmethod
+    def check_valid_toml_file(path: pathlib.Path) -> bool:
+        try:
+            utils.read_toml_data(path)
+            return True
+        except tomllib.TOMLDecodeError:
+            return False
+
     def __call__(
         self,
         parser: argparse.ArgumentParser,
@@ -86,9 +96,7 @@ class TomlFileAction(argparse.Action):
         values = typing.cast(pathlib.Path, values)
         if not values.exists():
             parser.error(f"'{values}' does not exist.")
-        try:
-            utils.read_toml_data(values)
-        except tomllib.TOMLDecodeError:
+        if not self.check_valid_toml_file(values):
             parser.error(f"{values} does not appear to be a valid TOML file.")
         setattr(namespace, self.dest, values)
 
@@ -187,6 +195,11 @@ def get_args_parser() -> argparse.ArgumentParser:
              'This option can be used multiple times.'
     )
 
+    parser.add_argument(
+        "--license-file",
+        type=pathlib.Path,
+        help="File used for application's EULA "
+    )
     # Only default config file if one exists on pwd
     if os.path.exists("pyproject.toml"):
         default_installer_config_file = "pyproject.toml"
@@ -194,6 +207,7 @@ def get_args_parser() -> argparse.ArgumentParser:
     else:
         default_installer_config_file = None
         config_file_help_message = "config file"
+
     parser.add_argument(
         "--config-file",
         default=default_installer_config_file,
@@ -288,6 +302,39 @@ class AbsFreezeConfigGenerator(abc.ABC):
         """Generate the string data from the specs dataclass."""
 
 
+def use_license_file_from_user_args(
+    args: argparse.Namespace
+) -> Optional[pathlib.Path]:
+    return args.license_file
+
+
+def extract_license_file_from_wheel(
+    args: argparse.Namespace
+) -> Optional[pathlib.Path]:
+    md = get_package_metadata(args.python_package_file)
+    generated_license_file = os.path.join(args.build_path, "license.txt")
+    license_data = md.get_all('license')
+
+    if license_data:
+        data = license_data[0]
+        with open(generated_license_file, "w", encoding="utf-8") as fp:
+            fp.write(data)
+        logger.info(
+            "Extracted license file %s from %s",
+            generated_license_file, args.python_package_file
+        )
+        return pathlib.Path(generated_license_file)
+    return None
+
+
+DEFAULT_LICENSE_FILE_FINDING_ORDER: List[
+    Callable[[argparse.Namespace], Optional[pathlib.Path]],
+] = [
+    use_license_file_from_user_args,
+    extract_license_file_from_wheel
+]
+
+
 def generate_cpack_config_file_string(
         source_application_path: str,
         args: argparse.Namespace,
@@ -301,6 +348,15 @@ def generate_cpack_config_file_string(
         cl_args=args
     )
     generator.toml_config_file = args.config_file
+
+    for strategy in DEFAULT_LICENSE_FILE_FINDING_ORDER:
+        logger.debug("trying %s", strategy.__name__)
+        result = strategy(args)
+        if result:
+            generator.license_file = result
+            break
+    else:
+        logger.warning("No license file found")
     generator.package_vendor = defaults.DEFAULT_PACKAGE_VENDOR_STRING
     return generator.generate()
 
