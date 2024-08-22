@@ -6,8 +6,12 @@ altgraph==0.17.4
     #   pyinstaller
 cachetools==5.4.0
     # via tox
+certifi==2024.7.4
+    # via requests
 chardet==5.2.0
     # via tox
+charset-normalizer==3.3.2
+    # via requests
 cmake==3.30.2
     # via -r requirements/requirements-run.txt
 colorama==0.4.6
@@ -24,13 +28,20 @@ filelock==3.15.4
     # via
     #   tox
     #   virtualenv
+idna==3.7
+    # via requests
 importlib-metadata==8.2.0
     # via
     #   -r requirements/requirements-run.txt
     #   pyinstaller
     #   pyinstaller-hooks-contrib
+    #   speedwagon
+importlib-resources==6.4.2
+    # via speedwagon
 iniconfig==2.0.0
     # via pytest
+lxml==5.3.0
+    # via speedwagon
 macholib==1.16.3
     # via pyinstaller
 mypy==1.11.1
@@ -53,6 +64,7 @@ platformdirs==4.2.2
 pluggy==1.5.0
     # via
     #   pytest
+    #   speedwagon
     #   tox
 pyinstaller==6.10.0
     # via -r requirements/requirements-run.txt
@@ -66,10 +78,16 @@ pytest==8.3.2
     #   pytest-cov
 pytest-cov==5.0.0
     # via -r requirements/requirements-dev.txt
+pyyaml==6.0.2
+    # via speedwagon
+requests==2.32.3
+    # via speedwagon
 setuptools==72.2.0
     # via
     #   pyinstaller
     #   pyinstaller-hooks-contrib
+speedwagon==0.4.0b8
+    # via -r requirements/requirements-dev.txt
 tomli==2.0.1
     # via
     #   coverage
@@ -82,8 +100,14 @@ tox==4.18.0
 types-pyinstaller==6.10.0.20240812
     # via -r requirements/requirements-dev.txt
 typing-extensions==4.12.2
-    # via mypy
+    # via
+    #   mypy
+    #   speedwagon
+urllib3==2.2.2
+    # via requests
 virtualenv==20.26.3
     # via tox
 zipp==3.20.0
-    # via importlib-metadata
+    # via
+    #   importlib-metadata
+    #   importlib-resources
