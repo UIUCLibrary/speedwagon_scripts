@@ -262,6 +262,7 @@ class TestWindowsFreezeConfigGenerator:
             Mock(name="create_hook_for_wheel")
         )
         config_generator.additional_hooks_path = "hooks"
+        config_generator.python_package_file = pathlib.Path("dummy.whl")
 
         specs = Mock()
         config_generator.generate_freeze_config(specs)
@@ -293,9 +294,10 @@ class TestMacFreezeConfigGenerator:
     def test_generate_freeze_config(self, monkeypatch):
         config_generator = package_speedwagon.MacFreezeConfigGenerator()
         config_generator.additional_hooks_path = "hooks"
+        config_generator.python_package_file = pathlib.Path("dummy.whl")
+
         specs = Mock(name="specs")
         monkeypatch.setattr(os.path, "exists", Mock(return_value=True))
-
         monkeypatch.setattr(
             package_speedwagon, "get_package_top_level",
             Mock(name="get_package_top_level", return_value=".")

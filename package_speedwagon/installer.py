@@ -16,7 +16,7 @@ from typing import (
     Optional,
     Sequence,
     Type,
-    Union
+    Union, Tuple
 )
 
 if sys.version_info < (3, 10):
@@ -58,10 +58,11 @@ class LocateLicenseFile:
                 return potential_file
         return None
 
-    def __call__(self):
+    def __call__(self) -> Optional[str]:
         license_file = self.locate_license_file()
         if license_file:
             return os.path.abspath(license_file)
+        return None
 
 
 class GenerateNoLicenseGivenFile:
@@ -70,10 +71,10 @@ class GenerateNoLicenseGivenFile:
         self.output_file = output_file
 
     @staticmethod
-    def get_license_text():
+    def get_license_text() -> str:
         return "No License given"
 
-    def write_license_file(self):
+    def write_license_file(self) -> None:
         with open(self.output_file, "w", encoding="utf-8") as license_file:
             license_file.write(self.get_license_text())
 
@@ -317,7 +318,9 @@ set(CPACK_WIX_ARCHITECTURE "%(cpack_wix_architecture)s")
 """
 
     @property
-    def default_license_find_strategies(self):
+    def default_license_find_strategies(
+        self
+    ) -> List[Callable[[], Optional[str]]]:
         expected_license_file = os.path.join(self.output_path, "LICENSE.txt")
         return [
             CopyLicenseFile(
@@ -368,7 +371,9 @@ set(CPACK_WIX_ARCHITECTURE "%(cpack_wix_architecture)s")
         )
 
     @staticmethod
-    def get_wix_specific_configs(architecture=platform.architecture()):
+    def get_wix_specific_configs(
+        architecture: Tuple[str, str] = platform.architecture()
+    ) -> Dict[str, Optional[str]]:
 
         if architecture[0] == '64bit':
             return {

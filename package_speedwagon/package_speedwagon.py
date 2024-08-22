@@ -221,7 +221,7 @@ def get_args_parser() -> argparse.ArgumentParser:
 def create_virtualenv(
     package: str,
     build_path: str,
-    *requirements_files
+    *requirements_files: str
 ) -> None:
     """Create Python virtual environment using the package provided."""
     try:
@@ -305,7 +305,7 @@ class AbsFreezeConfigGenerator(abc.ABC):
 def use_license_file_from_user_args(
     args: argparse.Namespace
 ) -> Optional[pathlib.Path]:
-    return args.license_file
+    return typing.cast(Optional[pathlib.Path], args.license_file)
 
 
 def extract_license_file_from_wheel(
@@ -435,10 +435,10 @@ class WindowsFreezeConfigGenerator(AbsFreezeConfigGenerator):
     SpecsDataClass = freeze.DefaultGenerateSpecs.SpecsDataClass
     FreezeConfigClass = freeze.DefaultGenerateSpecs
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        self.python_package_file = None
-        self.additional_hooks_path = None
+        self.python_package_file: Optional[pathlib.Path] = None
+        self.additional_hooks_path: Optional[str] = None
 
     def build_specs(self, user_args: argparse.Namespace) -> freeze.SpecsData:
         package_env = os.path.join(user_args.build_path, "speedwagon")
@@ -453,9 +453,8 @@ class WindowsFreezeConfigGenerator(AbsFreezeConfigGenerator):
             ),
             (logo, 'speedwagon'),
         ]
-
-        self.additional_hooks_path =\
-            os.path.join(user_args.build_path, "hooks")
+        hook_paths: str = os.path.join(user_args.build_path, "hooks")
+        self.additional_hooks_path = hook_paths
 
         self.python_package_file = user_args.python_package_file
 
@@ -472,7 +471,7 @@ class WindowsFreezeConfigGenerator(AbsFreezeConfigGenerator):
             ),
             hookspath=[
                 os.path.abspath(os.path.dirname(__file__)),
-                os.path.abspath(self.additional_hooks_path)
+                os.path.abspath(hook_paths)
             ],
             search_paths=[package_env],
         )
@@ -485,10 +484,16 @@ class WindowsFreezeConfigGenerator(AbsFreezeConfigGenerator):
         if not os.path.exists(self.additional_hooks_path):
             os.makedirs(self.additional_hooks_path)
 
+        if self.python_package_file is None:
+            raise ValueError("No python package file specified")
+        else:
+            package_file: pathlib.Path = self.python_package_file
+
         freeze.create_hook_for_wheel(
             path=self.additional_hooks_path,
-            strategy=lambda: get_package_top_level(self.python_package_file),
+            strategy=lambda: get_package_top_level(package_file),
         )
+
         specs_file_generator = self.FreezeConfigClass(specs)
         return specs_file_generator.generate()
 
@@ -497,10 +502,10 @@ class MacFreezeConfigGenerator(AbsFreezeConfigGenerator):
     SpecsDataClass = freeze.DefaultGenerateSpecs.SpecsDataClass
     FreezeConfigClass = freeze.DefaultGenerateSpecs
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        self.python_package_file = None
-        self.additional_hooks_path = None
+        self.python_package_file: Optional[pathlib.Path] = None
+        self.additional_hooks_path: Optional[str] = None
 
     def build_specs(self, user_args: argparse.Namespace) -> freeze.SpecsData:
         package_env = os.path.join(user_args.build_path, "speedwagon")
@@ -513,10 +518,11 @@ class MacFreezeConfigGenerator(AbsFreezeConfigGenerator):
                 'speedwagon'),
             (logo, 'speedwagon'),
         ]
-        self.additional_hooks_path = os.path.join(
+        hook_path: str = os.path.join(
             user_args.build_path,
             "hooks"
         )
+        self.additional_hooks_path = hook_path
         self.python_package_file = user_args.python_package_file
 
         specs = self.SpecsDataClass(
@@ -532,7 +538,7 @@ class MacFreezeConfigGenerator(AbsFreezeConfigGenerator):
             ),
             hookspath=[
                 os.path.abspath(os.path.dirname(__file__)),
-                os.path.abspath(self.additional_hooks_path)
+                os.path.abspath(hook_path)
             ],
             search_paths=[package_env],
         )
@@ -544,10 +550,13 @@ class MacFreezeConfigGenerator(AbsFreezeConfigGenerator):
 
         if not os.path.exists(self.additional_hooks_path):
             os.makedirs(self.additional_hooks_path)
-
+        if not self.python_package_file:
+            raise ValueError("No python package file specified")
+        else:
+            package_file: pathlib.Path = self.python_package_file
         freeze.create_hook_for_wheel(
             path=self.additional_hooks_path,
-            strategy=lambda: get_package_top_level(self.python_package_file),
+            strategy=lambda: get_package_top_level(package_file),
         )
         specs_file_generator = self.FreezeConfigClass(specs)
         return specs_file_generator.generate()
