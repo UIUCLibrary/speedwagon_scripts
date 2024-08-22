@@ -12,21 +12,26 @@ import os
 from typing import Optional, Mapping, Type
 import zipfile
 
-from package_speedwagon import defaults, freeze, installer
+from package_speedwagon import defaults, freeze, installer, utils
 
 if sys.version_info < (3, 10):
     import importlib_metadata as metadata
 else:
     from importlib import metadata
 
+if sys.version_info < (3, 11):
+    from pip._vendor import tomli as tomllib
+else:
+    import tomllib
+
 
 class SetInstallerIconAction(argparse.Action):
     def __call__(
-            self,
-            parser: argparse.ArgumentParser,
-            namespace: argparse.Namespace,
-            values,
-            option_string: Optional[str] = None
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values,
+        option_string: Optional[str] = None
     ):
         if values is None:
             raise ValueError("missing installer icon file")
@@ -67,6 +72,24 @@ class ValidatePackage(argparse.Action):
             parser.error(f"'{values}' is not a file.")
         if not values.name.endswith(".whl"):
             parser.error(f"'{values}' is not a wheel")
+        setattr(namespace, self.dest, values)
+
+
+class TomlFileAction(argparse.Action):
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values,
+        option_string: Optional[str] = None
+    ):
+        values = typing.cast(pathlib.Path, values)
+        if not values.exists():
+            parser.error(f"'{values}' does not exist.")
+        try:
+            utils.read_toml_data(values)
+        except tomllib.TOMLDecodeError:
+            parser.error(f"{values} does not appear to be a valid TOML file.")
         setattr(namespace, self.dest, values)
 
 
@@ -164,6 +187,20 @@ def get_args_parser() -> argparse.ArgumentParser:
              'This option can be used multiple times.'
     )
 
+    # Only default config file if one exists on pwd
+    if os.path.exists("pyproject.toml"):
+        default_installer_config_file = "pyproject.toml"
+        config_file_help_message = "config file (default: %(default)s)"
+    else:
+        default_installer_config_file = None
+        config_file_help_message = "config file"
+    parser.add_argument(
+        "--config-file",
+        default=default_installer_config_file,
+        action=TomlFileAction,
+        type=pathlib.Path,
+        help=config_file_help_message
+    )
     return parser
 
 
@@ -251,7 +288,7 @@ class AbsFreezeConfigGenerator(abc.ABC):
         """Generate the string data from the specs dataclass."""
 
 
-def generate_config_file_string(
+def generate_cpack_config_file_string(
         source_application_path: str,
         args: argparse.Namespace,
         generator_type: Type[installer.CPackGenerator]
@@ -263,7 +300,7 @@ def generate_config_file_string(
         package_metadata=get_package_metadata(args.python_package_file),
         cl_args=args
     )
-
+    generator.toml_config_file = args.config_file
     generator.package_vendor = defaults.DEFAULT_PACKAGE_VENDOR_STRING
     return generator.generate()
 
@@ -296,7 +333,7 @@ class AppleDMGPlatformPackager(AbsPlatformPackager):
         cpack_config_file = os.path.join(args.dist, "CPackConfig.cmake")
         with open(cpack_config_file, "w") as f:
             f.write(
-                generate_config_file_string(
+                generate_cpack_config_file_string(
                     source_application_path,
                     args,
                     installer.cpack_config_generators['DragNDrop']
@@ -471,7 +508,7 @@ class MSIPlatformPackager(AbsPlatformPackager):
         cpack_config_file = os.path.join(args.dist, "CPackConfig.cmake")
         with open(cpack_config_file, "w") as f:
             f.write(
-                generate_config_file_string(
+                generate_cpack_config_file_string(
                     source_application_path,
                     args,
                     installer.cpack_config_generators['Wix']

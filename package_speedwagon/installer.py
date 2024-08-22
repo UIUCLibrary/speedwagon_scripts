@@ -9,7 +9,6 @@ import pathlib
 import subprocess
 import sys
 from typing import (
-    Any,
     Callable,
     Dict,
     Iterable,
@@ -25,13 +24,10 @@ if sys.version_info < (3, 10):
 else:
     from importlib import metadata
 
-if sys.version_info < (3, 11):
-    from pip._vendor import tomli as tomllib
-else:
-    import tomllib
 
 import cmake
 
+from package_speedwagon import utils
 __all__ = ['cpack_config_generators']
 
 
@@ -302,23 +298,6 @@ set(CPACK_PACKAGE_EXECUTABLES "speedwagon" "%(app_name)s")
         return CPackGenerator.general_cpack_template % specs
 
 
-def read_toml_data(
-    toml_config_file: pathlib.Path,
-    loader=tomllib.load
-) -> Dict[str, Any]:
-    """Read contents of toml file.
-
-    Args:
-        toml_config_file: path to toml config file.
-        loader: toml loader function.
-
-    Returns: contents of toml file
-
-    """
-    with open(toml_config_file, "rb") as f:
-        return loader(f)
-
-
 class WixToolsetPackageGenerator(CPackGenerator):
     """Windows Package Generator.
 
@@ -366,7 +345,7 @@ set(CPACK_WIX_ARCHITECTURE "%(cpack_wix_architecture)s")
             return {}
         if not self.toml_config_file.exists():
             return {}
-        toml_data = read_toml_data(self.toml_config_file)
+        toml_data = utils.read_toml_data(self.toml_config_file)
         tool_data = toml_data.get('tool', {})
         if not tool_data:
             return {}
@@ -409,7 +388,7 @@ set(CPACK_WIX_ARCHITECTURE "%(cpack_wix_architecture)s")
         package_data = self.get_pyproject_toml_metadata_windows_packager_data()
         optional_lines = []
         for k, v in package_data.items():
-            if not k.startswith('CPACK_WIX'):
+            if not k.startswith('CPACK_'):
                 continue
             optional_lines.append(f'set({k} "{v}")')
 

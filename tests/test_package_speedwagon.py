@@ -27,6 +27,7 @@ class TestAppleDMGPlatformPackager:
                 argparse.Namespace(
                     app_name="dummy",
                     dist="dummy_dist",
+                    config_file='pyproject.toml',
                     python_package_file="package_file.py"
                 )
             ).name.endswith("CPackConfig.cmake")
@@ -121,6 +122,7 @@ class TestMSIPlatformPackager:
                 argparse.Namespace(
                     app_name="dummy",
                     dist="dummy_dist",
+                    config_file='pyproject.toml',
                     python_package_file="package_file.whl"
                 )
             ).name == "CPackConfig.cmake"
