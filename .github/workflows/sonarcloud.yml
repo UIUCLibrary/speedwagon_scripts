@@ -60,6 +60,10 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
           python-version: |
             3.8
             3.9
