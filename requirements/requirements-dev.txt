@@ -1,7 +1,9 @@
 coverage
 mypy
+pre-commit
 pytest
 pytest-cov
+ruff
 speedwagon==0.4.0b8
 tox
 types-pyinstaller
