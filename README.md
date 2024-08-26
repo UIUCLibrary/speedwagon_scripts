@@ -79,3 +79,20 @@ or
 ```shell
 ./make_standalone.sh yourpackage.whl --requirement gui_requirements.txt
 ```
+
+
+# Set up development environment
+
+1) Create a Python virtual environment with the dev requirements
+
+    ```shell
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -r requirements-dev.txt
+    ```
+
+2) Install pre-commit hooks (optional)
+   ```shell
+   pre-commit install
+   ```
+   
