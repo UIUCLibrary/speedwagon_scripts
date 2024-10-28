@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
+SCRIPT_PATH=$(dirname $(realpath "$0"))
 PYTHON_SCRIPT=$(dirname "$0")/./package_speedwagon/package_speedwagon.py
 DEFAULT_BUILD_VENV=build/build_standalone_build_env
 build_venv=$DEFAULT_BUILD_VENV
@@ -14,7 +15,7 @@ create_venv() {
     $base_python_path -m venv $venv_path
     . $venv_path/bin/activate
     python -m pip install pip --upgrade
-    python -m pip install PyInstaller cmake
+    python -m pip install -r $SCRIPT_PATH/requirements.txt
     deactivate
 }
 
@@ -22,7 +23,7 @@ create_standalone(){
     venv_path=$1
     shift;
     . $venv_path/bin/activate
-    $venv_path/bin/python $PYTHON_SCRIPT "$@"
+    PYTHONPATH=$SCRIPT_PATH $venv_path/bin/python -m package_speedwagon "$@"
     deactivate
 }
 
@@ -33,7 +34,7 @@ display_help() {
     echo "  --venv-path PATH          Specify the path to the Python interpreter (default: $DEFAULT_BUILD_VENV)"
     echo "  --help                    Display this help message"
     if [[ -e "$BUILD_VENV/bin/python" ]]; then
-        $BUILD_VENV/bin/python $PYTHON_SCRIPT --help
+        PYTHONPATH=$SCRIPT_PATH $BUILD_VENV/bin/python -m package_speedwagon --help
     fi
     exit 0
 }
@@ -66,4 +67,3 @@ if [[ ! -e "$build_venv" ]]; then
     create_venv $python_path $build_venv
 fi
 create_standalone $build_venv "$@"
-# python $PYTHON_SCRIPT $@

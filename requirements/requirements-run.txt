@@ -1,0 +1,4 @@
+cmake
+pyinstaller
+pip; python_version < "3.11"
+importlib_metadata; python_version < "3.10"
