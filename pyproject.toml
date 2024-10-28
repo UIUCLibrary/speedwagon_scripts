@@ -1,3 +1,22 @@
+[project]
+name = "package_speedwagon"
+version = "0.0.1.dev1"
+
+dependencies = [
+    'PyInstaller',
+    'cmake'
+]
+requires-python = ">=3.11"
+
+[project.scripts]
+package_speedwagon="package_speedwagon.package_speedwagon:main"
+
+[tool.setuptools.package-data]
+package_speedwagon = [
+    'favicon.icns',
+    'favicon.ico',
+    'favicon.png',
+]
 [tool.ruff]
 # Set the maximum line length to 79.
 line-length = 79

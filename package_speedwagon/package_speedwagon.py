@@ -1,10 +1,4 @@
 """Packaging script for Speedwagon distribution with bundled plugins."""
-# /// script
-# dependencies = [
-#   'PyInstaller',
-#   'cmake'
-# ]
-# ///
 
 import abc
 import logging
