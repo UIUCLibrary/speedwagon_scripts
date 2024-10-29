@@ -49,6 +49,7 @@ jobs:
           name: python-coverage-${{ matrix.os }}-py${{matrix.python_version}}
           path: .tox/.tmp/.coverage.*
           retention-days: 1
+          include-hidden-files: true
           if-no-files-found: error
 
   Analysis:
