@@ -49,6 +49,8 @@ jobs:
           name: python-coverage-${{ matrix.os }}-py${{matrix.python_version}}
           path: .tox/.tmp/.coverage.*
           retention-days: 1
+          include-hidden-files: true
+          if-no-files-found: error
 
   Analysis:
     runs-on: ubuntu-latest
@@ -91,6 +93,7 @@ jobs:
           name: combined-coverage-data
           path: reports/coverage.xml
           retention-days: 1
+          if-no-files-found: error
       - name: Run MyPy
         run: |
           mypy package_speedwagon | tee reports/mypy.txt
