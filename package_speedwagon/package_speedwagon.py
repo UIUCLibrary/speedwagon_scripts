@@ -134,6 +134,12 @@ def get_args_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--hidden-import",
+        action='append',
+        dest='hidden_imports',
+    )
+
+    parser.add_argument(
         "--build-path",
         default=os.path.join("build", "packaging"),
         help="path to build directory (default: %(default)s)"
@@ -292,6 +298,17 @@ def get_package_top_level(package_file: pathlib.Path) -> str:
         ).decode("utf-8").strip()
     raise ValueError("unknown File type")
 
+
+def generate_hook_for_hidden(hidden_imports, top_level_package, additional_hooks_path):
+    for package in hidden_imports:
+
+        if package == top_level_package:
+            continue
+
+        freeze.create_hook_for_wheel(
+            path=additional_hooks_path,
+            strategy=lambda: package,
+        )
 
 class AbsFreezeConfigGenerator(abc.ABC):
     @abc.abstractmethod
@@ -470,6 +487,9 @@ class WindowsFreezeConfigGenerator(AbsFreezeConfigGenerator):
             top_level_package_folder_name=get_package_top_level(
                 user_args.python_package_file
             ),
+            hidden_imports=[get_package_top_level(
+                user_args.python_package_file
+            )],
             hookspath=[
                 os.path.abspath(os.path.dirname(__file__)),
                 os.path.abspath(hook_paths)
@@ -489,10 +509,12 @@ class WindowsFreezeConfigGenerator(AbsFreezeConfigGenerator):
             raise ValueError("No python package file specified")
         else:
             package_file: pathlib.Path = self.python_package_file
+        top_level_package = get_package_top_level(package_file)
+        generate_hook_for_hidden(specs.hidden_imports, top_level_package, self.additional_hooks_path)
 
         freeze.create_hook_for_wheel(
             path=self.additional_hooks_path,
-            strategy=lambda: get_package_top_level(package_file),
+            strategy=lambda: top_level_package,
         )
 
         specs_file_generator = self.FreezeConfigClass(specs)
@@ -525,6 +547,13 @@ class MacFreezeConfigGenerator(AbsFreezeConfigGenerator):
         )
         self.additional_hooks_path = hook_path
         self.python_package_file = user_args.python_package_file
+        hidden_imports: List[str] = [
+            get_package_top_level(
+                user_args.python_package_file
+            )
+        ]
+        if user_args.hidden_imports:
+            hidden_imports.extend(user_args.hidden_imports)
 
         specs = self.SpecsDataClass(
             bootstrap_script=os.path.abspath(user_args.app_bootstrap_script),
@@ -537,6 +566,7 @@ class MacFreezeConfigGenerator(AbsFreezeConfigGenerator):
             top_level_package_folder_name=get_package_top_level(
                 user_args.python_package_file
             ),
+            hidden_imports=hidden_imports,
             hookspath=[
                 os.path.abspath(os.path.dirname(__file__)),
                 os.path.abspath(hook_path)
@@ -555,9 +585,12 @@ class MacFreezeConfigGenerator(AbsFreezeConfigGenerator):
             raise ValueError("No python package file specified")
         else:
             package_file: pathlib.Path = self.python_package_file
+
+        top_level_package = get_package_top_level(package_file)
+        generate_hook_for_hidden(specs.hidden_imports, top_level_package, self.additional_hooks_path)
         freeze.create_hook_for_wheel(
             path=self.additional_hooks_path,
-            strategy=lambda: get_package_top_level(package_file),
+            strategy=lambda: top_level_package,
         )
         specs_file_generator = self.FreezeConfigClass(specs)
         return specs_file_generator.generate()
@@ -663,7 +696,8 @@ def main() -> None:
                 freeze_config_generator.build_specs(args)
             )
         )
-
+    with open(specs_file_name) as f:
+        print(f.read())
     freeze.freeze_env(
         specs_file=specs_file_name,
         work_path=os.path.join(args.build_path, 'workpath'),

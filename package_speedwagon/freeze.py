@@ -193,6 +193,7 @@ class SpecsData:
     data_files: List[Tuple[str, str]] = dataclasses.field(default_factory=list)
     hookspath: List[str] = dataclasses.field(default_factory=list)
     top_level_package_folder_name: Optional[str] = None
+    hidden_imports: List[str] = dataclasses.field(default_factory=list)
 
 
 class DefaultGenerateSpecs(AbsGenerateSpecs[SpecsData]):
@@ -211,7 +212,7 @@ a = Analysis([%(bootstrap_script)r],
              pathex=%(search_paths)s,
              binaries=[],
              datas=%(datas)s,
-             hiddenimports=['%(hidden_imports)s'],
+             hiddenimports=%(hidden_imports)s,
              hookspath=[os.path.join(workpath, ".."), SPECPATH] + %(hookspath)s,
              hooksconfig={},
              runtime_hooks=[],
@@ -258,7 +259,7 @@ app = BUNDLE(coll,
     SpecsDataClass = SpecsData
     key_mapping = {
         "data_files": "datas",
-        'top_level_package_folder_name': "hidden_imports"
+        'hidden_imports': "hidden_imports"
     }
 
     def __init__(self, data: SpecsData) -> None:

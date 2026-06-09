@@ -260,6 +260,8 @@ class TestWindowsFreezeConfigGenerator:
             name="FreezeConfigClass.generate", return_value="something"
         )
         monkeypatch.setattr(os.path, "exists", Mock(return_value=True))
+        monkeypatch.setattr(package_speedwagon, "get_package_top_level", Mock(return_value="dummy"))
+        monkeypatch.setattr(package_speedwagon, "generate_hook_for_hidden", Mock())
         monkeypatch.setattr(
             package_speedwagon.freeze,
             "create_hook_for_wheel",
@@ -290,6 +292,7 @@ class TestMacFreezeConfigGenerator:
                 installer_icon="installer.ico",
                 python_package_file="package_file.whl",
                 app_bootstrap_script="bootstrap.py",
+                hidden_imports=[],
                 app_name="dummy_app",
                 app_executable_name="dummy",
             )
@@ -303,6 +306,7 @@ class TestMacFreezeConfigGenerator:
 
         specs = Mock(name="specs")
         monkeypatch.setattr(os.path, "exists", Mock(return_value=True))
+        monkeypatch.setattr(package_speedwagon, "generate_hook_for_hidden", Mock())
         monkeypatch.setattr(
             package_speedwagon,
             "get_package_top_level",
