@@ -476,6 +476,14 @@ class WindowsFreezeConfigGenerator(AbsFreezeConfigGenerator):
 
         self.python_package_file = user_args.python_package_file
 
+        hidden_imports: List[str] = [
+            get_package_top_level(
+                user_args.python_package_file
+            )
+        ]
+        if user_args.hidden_imports:
+            hidden_imports.extend(user_args.hidden_imports)
+
         specs = self.SpecsDataClass(
             bootstrap_script=os.path.abspath(user_args.app_bootstrap_script),
             app_executable_name=user_args.app_executable_name,
@@ -487,9 +495,7 @@ class WindowsFreezeConfigGenerator(AbsFreezeConfigGenerator):
             top_level_package_folder_name=get_package_top_level(
                 user_args.python_package_file
             ),
-            hidden_imports=[get_package_top_level(
-                user_args.python_package_file
-            )],
+            hidden_imports=hidden_imports,
             hookspath=[
                 os.path.abspath(os.path.dirname(__file__)),
                 os.path.abspath(hook_paths)

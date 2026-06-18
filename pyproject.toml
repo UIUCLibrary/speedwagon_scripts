@@ -11,6 +11,8 @@ requires-python = ">=3.11"
 
 [project.scripts]
 package_speedwagon="package_speedwagon.package_speedwagon:main"
+[tool.setuptools]
+packages = ["package_speedwagon"]
 
 [tool.setuptools.package-data]
 package_speedwagon = [
