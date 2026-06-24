@@ -1,6 +1,7 @@
 """Packaging script for Speedwagon distribution with bundled plugins."""
 
 import abc
+import hashlib
 import logging
 import pathlib
 import shutil
@@ -11,6 +12,8 @@ import venv
 import argparse
 import subprocess
 import os
+import tomlkit
+
 from typing import Optional, Mapping, Type, List, Callable
 import zipfile
 from package_speedwagon import defaults, freeze, installer, utils
@@ -246,6 +249,97 @@ def create_virtualenv(
             ] + requirements_commands,
             check=True
         )
+    except Exception:
+        shutil.rmtree(build_path)
+        raise
+
+def read_pkg_info(raw_data: str):
+    data = {
+        "name": None,
+        "version": None,
+        "license": None,
+        "summary": None,
+        "project_url": None
+    }
+    for line in raw_data.split("\n"):
+        match line.split():
+            case ["Name:", name]:
+                data["name"] = name
+
+            case ["Version:", version]:
+                data["version"] = version
+
+            case ["License-Expression:", license_type]:
+                data["license"] = license_type
+
+            case["Summary:", *values]:
+                data["summary"] = " ".join(values)
+
+            case["Project-URL:", "project,", url]:
+                data["project_url"] = url
+    return data
+
+
+def read_whl_metadata(wheel):
+    with zipfile.ZipFile(wheel) as zip_file:
+        for compressed_file in zip_file.infolist():
+            if compressed_file.is_dir():
+                continue
+            path, filename = os.path.split(compressed_file.filename)
+            if "dist-info" not in path.split(os.path.sep)[0]:
+                continue
+            if "METADATA" != filename:
+                continue
+            return read_pkg_info(zip_file.read(compressed_file).decode("utf-8"))
+        else:
+            raise FileNotFoundError("Unable to find whl metadata")
+
+
+def create_virtualenv_from_pylock(
+    package: str,
+    build_path: str,
+    lock_file: str
+) -> None:
+    """Create Python virtual environment using the package provided."""
+    try:
+        venv.create(build_path, with_pip=False)
+        with open(package, "rb") as f:
+            digest = hashlib.file_digest(f, "sha256")
+            package_hash = digest.hexdigest()
+
+        with tempfile.TemporaryDirectory() as tmp_dir_path:
+            generated_pylockfile = os.path.join(tmp_dir_path, "pylock.toml")
+            with open(lock_file, "r") as lock_file_fp:
+                lock_file_content = tomlkit.parse(lock_file_fp.read())
+
+            wheel_metadata = read_whl_metadata(package)
+            new_package = {
+                "name": wheel_metadata['name'],
+                "version": wheel_metadata['version'],
+                "archive":
+                    {
+                        "path": os.path.relpath(package, start=tmp_dir_path),
+                        "hashes": {
+                            "sha256": package_hash
+                        }
+                    }
+            }
+
+            lock_file_content['packages'].append(new_package)
+            with open(generated_pylockfile, "w") as output_fp:
+                output_fp.write(tomlkit.dumps(lock_file_content))
+
+            args = [
+                    "pip",
+                    "install",
+                    "--upgrade",
+                    f"--target={build_path}",
+                    "-r", generated_pylockfile
+                ]
+            subprocess.run(
+                args,
+                check=True
+            )
     except Exception:
         shutil.rmtree(build_path)
         raise
@@ -684,11 +778,18 @@ def main() -> None:
                 "Scripts" if sys.platform == 'win32' else 'bin'
             )),
     ]):
-        create_virtualenv(
-            args.python_package_file,
-            package_env,
-            *args.requirement,
-        )
+        if len(args.requirement) == 1 and pathlib.Path(args.requirement[0]).name == "pylock.toml":
+            create_virtualenv_from_pylock(
+                args.python_package_file,
+                package_env,
+                args.requirement[0]
+            )
+        else:
+            create_virtualenv(
+                args.python_package_file,
+                package_env,
+                *args.requirement,
+            )
 
     specs_file_name = os.path.join(args.build_path, "specs.spec")
     config_generator = config_os_mappings.get(sys.platform)

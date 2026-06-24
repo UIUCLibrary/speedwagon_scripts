@@ -243,6 +243,7 @@ class TestWindowsFreezeConfigGenerator:
         config_generator.SpecsDataClass = Mock(name="SpecsDataClass")
         config_generator.build_specs(
             user_args=argparse.Namespace(
+                hidden_imports=[],
                 build_path="build",
                 app_icon="icon.ico",
                 installer_icon="installer.ico",
