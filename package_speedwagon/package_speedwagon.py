@@ -287,7 +287,9 @@ def read_whl_metadata(wheel):
                 continue
             if "METADATA" != filename:
                 continue
-            return read_pkg_info(zip_file.read(compressed_file).decode("utf-8"))
+            return read_pkg_info(
+                zip_file.read(compressed_file).decode("utf-8")
+            )
         else:
             raise FileNotFoundError("Unable to find whl metadata")
 
@@ -390,7 +392,11 @@ def get_package_top_level(package_file: pathlib.Path) -> str:
     raise ValueError("unknown File type")
 
 
-def generate_hook_for_hidden(hidden_imports, top_level_package, additional_hooks_path):
+def generate_hook_for_hidden(
+    hidden_imports,
+    top_level_package,
+    additional_hooks_path
+):
     for package in hidden_imports:
 
         if package == top_level_package:
@@ -607,7 +613,12 @@ class WindowsFreezeConfigGenerator(AbsFreezeConfigGenerator):
         else:
             package_file: pathlib.Path = self.python_package_file
         top_level_package = get_package_top_level(package_file)
-        generate_hook_for_hidden(specs.hidden_imports, top_level_package, self.additional_hooks_path)
+
+        generate_hook_for_hidden(
+            specs.hidden_imports,
+            top_level_package,
+            self.additional_hooks_path
+        )
 
         freeze.create_hook_for_wheel(
             path=self.additional_hooks_path,
@@ -684,7 +695,13 @@ class MacFreezeConfigGenerator(AbsFreezeConfigGenerator):
             package_file: pathlib.Path = self.python_package_file
 
         top_level_package = get_package_top_level(package_file)
-        generate_hook_for_hidden(specs.hidden_imports, top_level_package, self.additional_hooks_path)
+
+        generate_hook_for_hidden(
+            specs.hidden_imports,
+            top_level_package,
+            self.additional_hooks_path
+        )
+
         freeze.create_hook_for_wheel(
             path=self.additional_hooks_path,
             strategy=lambda: top_level_package,
@@ -775,7 +792,8 @@ def main() -> None:
                 "Scripts" if sys.platform == 'win32' else 'bin'
             )),
     ]):
-        if len(args.requirement) == 1 and pathlib.Path(args.requirement[0]).name == "pylock.toml":
+        if len(args.requirement) == 1 and \
+                pathlib.Path(args.requirement[0]).name == "pylock.toml":
             create_virtualenv_from_pylock(
                 args.python_package_file,
                 package_env,
@@ -810,7 +828,9 @@ def main() -> None:
         work_path=os.path.join(args.build_path, 'workpath'),
         dest=frozen_app_build_path
     )
-    expected_frozen_path = freeze.find_frozen_folder(frozen_app_build_path, args=args)
+    expected_frozen_path =\
+        freeze.find_frozen_folder(frozen_app_build_path, args=args)
+
     if not expected_frozen_path:
         raise FileNotFoundError(
             "Unable to find folder containing frozen application"

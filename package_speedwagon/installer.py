@@ -7,7 +7,6 @@ import shutil
 import packaging.version
 import pathlib
 import subprocess
-import sys
 from typing import (
     Callable,
     Dict,

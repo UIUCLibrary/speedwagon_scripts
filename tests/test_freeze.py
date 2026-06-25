@@ -48,8 +48,17 @@ class TestDefaultGenerateSpecs:
         assert sample_bootstrap_script_name in generate_specs
 
     @pytest.mark.slow
-    @pytest.mark.skipif(sys.platform.startswith("linux"), reason="This test does not run on Linux")
-    def test_is_valid(self, tmp_path, sample_specs, sample_collection_name, monkeypatch):
+    @pytest.mark.skipif(
+        sys.platform.startswith("linux"),
+        reason="This test does not run on Linux"
+    )
+    def test_is_valid(
+        self,
+        tmp_path,
+        sample_specs,
+        sample_collection_name,
+        monkeypatch
+    ):
         specs_generator = freeze.DefaultGenerateSpecs(sample_specs)
         generate_specs = specs_generator.generate()
         dummy_project = tmp_path / "project"
