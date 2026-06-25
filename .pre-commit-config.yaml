@@ -5,3 +5,9 @@ repos:
   hooks:
     # Run the linter.
     - id: ruff
+
+- repo: https://github.com/jenkinsci/jenkinsfilelint
+  rev: v1.4.0
+  hooks:
+    - id: jenkinsfilelint
+      args: ["--include", "Jenkinsfile"] # Adjust the pattern as needed

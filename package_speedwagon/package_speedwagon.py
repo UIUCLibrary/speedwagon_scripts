@@ -13,15 +13,13 @@ import argparse
 import subprocess
 import os
 import tomlkit
+import tomlkit.exceptions
 
-from typing import Optional, Mapping, Type, List, Callable
+from typing import Optional, Mapping, Type, List, Callable, Dict
 import zipfile
 from package_speedwagon import defaults, freeze, installer, utils
 
-if sys.version_info < (3, 10):
-    import importlib_metadata as metadata
-else:
-    from importlib import metadata
+from importlib import metadata
 
 if sys.version_info < (3, 11):
     from pip._vendor import tomli as tomllib
@@ -254,7 +252,7 @@ def create_virtualenv(
         raise
 
 def read_pkg_info(raw_data: str):
-    data = {
+    data: Dict[str, Optional[str]] = {
         "name": None,
         "version": None,
         "license": None,
@@ -290,7 +288,9 @@ def read_whl_metadata(wheel):
                 continue
             if "METADATA" != filename:
                 continue
-            return read_pkg_info(zip_file.read(compressed_file).decode("utf-8"))
+            return read_pkg_info(
+                zip_file.read(compressed_file).decode("utf-8")
+            )
         else:
             raise FileNotFoundError("Unable to find whl metadata")
 
@@ -393,7 +393,11 @@ def get_package_top_level(package_file: pathlib.Path) -> str:
     raise ValueError("unknown File type")
 
 
-def generate_hook_for_hidden(hidden_imports, top_level_package, additional_hooks_path):
+def generate_hook_for_hidden(
+    hidden_imports,
+    top_level_package,
+    additional_hooks_path
+):
     for package in hidden_imports:
 
         if package == top_level_package:
@@ -448,9 +452,9 @@ DEFAULT_LICENSE_FILE_FINDING_ORDER: List[
 
 
 def generate_cpack_config_file_string(
-        source_application_path: str,
-        args: argparse.Namespace,
-        generator_type: Type[installer.CPackGenerator]
+    source_application_path: str,
+    args: argparse.Namespace,
+    generator_type: Type[installer.CPackGenerator]
 ) -> str:
     generator = generator_type(
         args.app_name,
@@ -459,6 +463,7 @@ def generate_cpack_config_file_string(
         package_metadata=get_package_metadata(args.python_package_file),
         cl_args=args
     )
+    generator.build_path = os.path.join(args.build_path, "frozen", "cpack")
     generator.toml_config_file = args.config_file
 
     for strategy in DEFAULT_LICENSE_FILE_FINDING_ORDER:
@@ -474,6 +479,9 @@ def generate_cpack_config_file_string(
 
 
 class AbsPlatformPackager(abc.ABC):
+    def __init__(self):
+        self.build_path = pathlib.Path("build")
+
     @abc.abstractmethod
     def generate_config_file(
         self,
@@ -498,7 +506,12 @@ class AppleDMGPlatformPackager(AbsPlatformPackager):
         source_application_path: str,
         args: argparse.Namespace
     ) -> pathlib.Path:
-        cpack_config_file = os.path.join(args.dist, "CPackConfig.cmake")
+        build_path = os.path.join(args.build_path, "frozen", "cpack")
+
+        if not os.path.exists(build_path):
+            os.makedirs(build_path)
+
+        cpack_config_file = os.path.join(build_path, "CPackConfig.cmake")
         with open(cpack_config_file, "w") as f:
             f.write(
                 generate_cpack_config_file_string(
@@ -523,12 +536,12 @@ class AppleDMGPlatformPackager(AbsPlatformPackager):
         config_file: pathlib.Path,
         output_path: pathlib.Path = pathlib.Path("dist")
     ) -> pathlib.Path:
-        installer.run_cpack(str(config_file), str(output_path))
+        installer.run_cpack(str(config_file), str(self.build_path))
         try:
-            return self.locate_installer_artifact(output_path)
+            return self.locate_installer_artifact(self.build_path)
         except FileNotFoundError as error:
             raise FileNotFoundError(
-                f"No dmg found for {config_file}"
+                f"No dmg found for {config_file}. Looked in {self.build_path}"
             ) from error
 
 
@@ -610,7 +623,12 @@ class WindowsFreezeConfigGenerator(AbsFreezeConfigGenerator):
         else:
             package_file: pathlib.Path = self.python_package_file
         top_level_package = get_package_top_level(package_file)
-        generate_hook_for_hidden(specs.hidden_imports, top_level_package, self.additional_hooks_path)
+
+        generate_hook_for_hidden(
+            specs.hidden_imports,
+            top_level_package,
+            self.additional_hooks_path
+        )
 
         freeze.create_hook_for_wheel(
             path=self.additional_hooks_path,
@@ -687,7 +705,13 @@ class MacFreezeConfigGenerator(AbsFreezeConfigGenerator):
             package_file: pathlib.Path = self.python_package_file
 
         top_level_package = get_package_top_level(package_file)
-        generate_hook_for_hidden(specs.hidden_imports, top_level_package, self.additional_hooks_path)
+
+        generate_hook_for_hidden(
+            specs.hidden_imports,
+            top_level_package,
+            self.additional_hooks_path
+        )
+
         freeze.create_hook_for_wheel(
             path=self.additional_hooks_path,
             strategy=lambda: top_level_package,
@@ -703,8 +727,12 @@ class MSIPlatformPackager(AbsPlatformPackager):
         source_application_path: str,
         args: argparse.Namespace
     ) -> pathlib.Path:
+        build_path = os.path.join(args.build_path, "frozen", "cpack")
+        cpack_config_file = os.path.join(build_path, "CPackConfig.cmake")
 
-        cpack_config_file = os.path.join(args.dist, "CPackConfig.cmake")
+        if not os.path.exists(build_path):
+            os.makedirs(build_path)
+
         with open(cpack_config_file, "w") as f:
             f.write(
                 generate_cpack_config_file_string(
@@ -729,9 +757,9 @@ class MSIPlatformPackager(AbsPlatformPackager):
         config_file: pathlib.Path,
         output_path: pathlib.Path = pathlib.Path("dist")
     ) -> pathlib.Path:
-        installer.run_cpack(str(config_file), str(output_path))
+        installer.run_cpack(str(config_file), str(self.build_path))
         try:
-            return self.locate_installer_artifact(output_path)
+            return self.locate_installer_artifact(self.build_path)
         except FileNotFoundError as error:
             raise FileNotFoundError(
                 f"No .msi found for {config_file}"
@@ -778,7 +806,8 @@ def main() -> None:
                 "Scripts" if sys.platform == 'win32' else 'bin'
             )),
     ]):
-        if len(args.requirement) == 1 and pathlib.Path(args.requirement[0]).name == "pylock.toml":
+        if len(args.requirement) == 1 and \
+                pathlib.Path(args.requirement[0]).name == "pylock.toml":
             create_virtualenv_from_pylock(
                 args.python_package_file,
                 package_env,
@@ -805,25 +834,35 @@ def main() -> None:
         )
     with open(specs_file_name) as f:
         print(f.read())
+
+    frozen_app_build_path = os.path.join(args.build_path, "frozen")
+
     freeze.freeze_env(
         specs_file=specs_file_name,
         work_path=os.path.join(args.build_path, 'workpath'),
-        dest=args.dist
+        dest=frozen_app_build_path
     )
-    expected_frozen_path = freeze.find_frozen_folder(args.dist, args=args)
+    expected_frozen_path =\
+        freeze.find_frozen_folder(frozen_app_build_path, args=args)
+
     if not expected_frozen_path:
         raise FileNotFoundError(
             "Unable to find folder containing frozen application"
         )
     platform_packager = config_generator.get_application_packager()
+    platform_packager.build_path =\
+        os.path.join(args.build_path, "frozen", "cpack")
     packaging_config_file = platform_packager.generate_config_file(
         source_application_path=expected_frozen_path,
         args=args
     )
+    assert os.path.exists(packaging_config_file)
     package_file =\
         platform_packager.create_system_package(packaging_config_file)
+    output_file = os.path.join(args.dist, pathlib.Path(package_file).name)
+    shutil.move(package_file, output_file)
 
-    print(f"Created {package_file}")
+    print(f"Created {output_file}")
 
 
 if __name__ == '__main__':

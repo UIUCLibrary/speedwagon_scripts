@@ -5,11 +5,10 @@ version = "0.1.4.dev0"
 dependencies = [
     'PyInstaller',
     'cmake',
-    'speedwagon',
     "tomlkit",
     'pip>=26.1'
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 
 [build-system]
 requires = ["setuptools>=77.0.0"]
@@ -24,6 +23,7 @@ tox-uv = [
 type-checking = [
     "mypy",
     "types-pyinstaller",
+    "lxml",
 ]
 test = [
     "pytest",
@@ -32,15 +32,21 @@ dev = [
     "coverage",
     "pre-commit",
     "ruff",
-    "speedwagon==0.4.0b8",
     "types-pyinstaller",
     {include-group = "type-checking"},
     {include-group = "test"},
     {include-group = "tox"},
 ]
-
+ci = [
+    {include-group = "dev"},
+]
 [project.scripts]
 package_speedwagon="package_speedwagon.package_speedwagon:main"
+
+[tool.mypy]
+exclude = [
+    "package_speedwagon/speedwagon-bootstrap.py"
+]
 
 [tool.setuptools]
 packages = ["package_speedwagon"]
