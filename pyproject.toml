@@ -43,6 +43,11 @@ ci = [
 [project.scripts]
 package_speedwagon="package_speedwagon.package_speedwagon:main"
 
+[tool.mypy]
+exclude = [
+    "package_speedwagon/speedwagon-bootstrap.py"
+]
+
 [tool.setuptools]
 packages = ["package_speedwagon"]
 

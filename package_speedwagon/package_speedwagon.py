@@ -14,7 +14,7 @@ import subprocess
 import os
 import tomlkit
 
-from typing import Optional, Mapping, Type, List, Callable
+from typing import Optional, Mapping, Type, List, Callable, Dict
 import zipfile
 from package_speedwagon import defaults, freeze, installer, utils
 
@@ -251,7 +251,7 @@ def create_virtualenv(
         raise
 
 def read_pkg_info(raw_data: str):
-    data = {
+    data: Dict[str, Optional[str]] = {
         "name": None,
         "version": None,
         "license": None,
