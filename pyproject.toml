@@ -37,7 +37,9 @@ dev = [
     {include-group = "test"},
     {include-group = "tox"},
 ]
-
+ci = [
+    {include-group = "dev"},
+]
 [project.scripts]
 package_speedwagon="package_speedwagon.package_speedwagon:main"
 
