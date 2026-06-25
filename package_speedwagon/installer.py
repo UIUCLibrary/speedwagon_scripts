@@ -114,6 +114,7 @@ class AbsCPackGenerator(abc.ABC):
         self.app_name = app_name
         self.frozen_application_path = frozen_application_path
         self.output_path = output_path
+        self.build_path = os.path.join("build", "packaging", "cpack")
 
     @abc.abstractmethod
     def cpack_generator_name(self) -> str:
@@ -142,9 +143,9 @@ author_email_regex = re.compile(
 
 
 def generate_package_description_file(
-        package_metadata: metadata.PackageMetadata,
-        output_path: str,
-        output_name: str = "package_description_file.txt"
+    package_metadata: metadata.PackageMetadata,
+    output_path: str,
+    output_name: str = "package_description_file.txt"
 ) -> str:
     """Generate package description file.
 
@@ -157,6 +158,9 @@ def generate_package_description_file(
 
     """
     description_file = os.path.join(output_path, output_name)
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+
     with open(description_file, 'w') as f:
         data: Union[List[str], str] = package_metadata.get_all(
             'summary',
@@ -295,7 +299,7 @@ set(CPACK_PACKAGE_EXECUTABLES "speedwagon" "%(app_name)s")
             "cpack_package_description_file": os.path.abspath(
                 generate_package_description_file(
                     self.package_metadata,
-                    output_path=self.output_path
+                    output_path=self.build_path
                 )
             ).replace(os.sep, '/')
         }
@@ -316,7 +320,7 @@ set(CPACK_WIX_ARCHITECTURE "%(cpack_wix_architecture)s")
     def default_license_find_strategies(
         self
     ) -> List[Callable[[], Optional[str]]]:
-        expected_license_file = os.path.join(self.output_path, "LICENSE.txt")
+        expected_license_file = os.path.join(self.build_path, "LICENSE.txt")
         return [
             CopyLicenseFile(
                 source_file='LICENSE',
@@ -517,8 +521,8 @@ def get_cpack_path(
 
 
 def run_cpack(
-        config_file: str,
-        build_path: str = os.path.join('.', "dist")
+    config_file: str,
+    build_path: str = os.path.join('.', "build"),
 ) -> None:
     """Execute cpack command with a config file.
 
@@ -528,8 +532,11 @@ def run_cpack(
 
     """
     args = [
-        "--config", config_file,
-        "-B", build_path,
+        "--config", os.path.relpath(config_file, build_path),
     ]
     cpack_cmd = get_cpack_path()
-    subprocess.check_call([cpack_cmd] + args)
+
+    if not os.path.exists(build_path):
+        os.makedirs(build_path)
+
+    subprocess.check_call([cpack_cmd] + args, cwd=build_path)

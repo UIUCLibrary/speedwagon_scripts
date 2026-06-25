@@ -462,7 +462,12 @@ def test_run_cpack(monkeypatch):
     monkeypatch.setattr(installer.subprocess, "check_call", check_call)
     installer.run_cpack("config_file.cmake", build_path="this/path")
     check_call.assert_called_with(
-        ["cpack", "--config", "config_file.cmake", "-B", "this/path"]
+        [
+            "cpack",
+            "--config",
+            os.path.relpath("config_file.cmake", "this/path")
+        ],
+        cwd='this/path'
     )
 
 
