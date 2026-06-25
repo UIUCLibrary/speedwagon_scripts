@@ -5,11 +5,10 @@ version = "0.1.4.dev0"
 dependencies = [
     'PyInstaller',
     'cmake',
-    'speedwagon',
     "tomlkit",
     'pip>=26.1'
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 
 [build-system]
 requires = ["setuptools>=77.0.0"]

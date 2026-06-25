@@ -3,10 +3,9 @@ import sys
 from unittest.mock import Mock, MagicMock
 
 
-if sys.version_info >= (3, 9):
-    import importlib.resources as importlib_resources
-else:
-    import importlib_resources
+import importlib.resources
+
+import importlib.metadata
 
 import PyInstaller.__main__
 import pytest
@@ -49,7 +48,7 @@ class TestDefaultGenerateSpecs:
         assert sample_bootstrap_script_name in generate_specs
 
     @pytest.mark.slow
-    def test_is_valid(self, tmp_path, sample_specs, sample_collection_name):
+    def test_is_valid(self, tmp_path, sample_specs, sample_collection_name, monkeypatch):
         specs_generator = freeze.DefaultGenerateSpecs(sample_specs)
         generate_specs = specs_generator.generate()
         dummy_project = tmp_path / "project"
@@ -59,7 +58,7 @@ class TestDefaultGenerateSpecs:
         specs_file.write_text(generate_specs)
 
         bootstrap_source_file =\
-            importlib_resources.files(
+            importlib.resources.files(
                 'package_speedwagon'
             ) / 'speedwagon-bootstrap.py'
 
@@ -69,7 +68,9 @@ class TestDefaultGenerateSpecs:
         output_path.mkdir()
 
         workpath = tmp_path / "workpath"
-
+        def mock_metadata(distribution_name):
+            return MagicMock(name='PackageMetadata')
+        monkeypatch.setattr(importlib.metadata, "metadata", mock_metadata)
         PyInstaller.__main__.run([
             '--noconfirm',
             str(specs_file),

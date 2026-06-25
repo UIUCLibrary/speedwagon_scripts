@@ -18,10 +18,7 @@ from typing import Optional, Mapping, Type, List, Callable
 import zipfile
 from package_speedwagon import defaults, freeze, installer, utils
 
-if sys.version_info < (3, 10):
-    import importlib_metadata as metadata
-else:
-    from importlib import metadata
+from importlib import metadata
 
 if sys.version_info < (3, 11):
     from pip._vendor import tomli as tomllib
@@ -805,12 +802,15 @@ def main() -> None:
         )
     with open(specs_file_name) as f:
         print(f.read())
+
+    frozen_app_build_path = os.path.join(args.build_path, "frozen")
+
     freeze.freeze_env(
         specs_file=specs_file_name,
         work_path=os.path.join(args.build_path, 'workpath'),
-        dest=args.dist
+        dest=frozen_app_build_path
     )
-    expected_frozen_path = freeze.find_frozen_folder(args.dist, args=args)
+    expected_frozen_path = freeze.find_frozen_folder(frozen_app_build_path, args=args)
     if not expected_frozen_path:
         raise FileNotFoundError(
             "Unable to find folder containing frozen application"

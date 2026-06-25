@@ -19,11 +19,7 @@ from typing import (
     Union, Tuple
 )
 
-if sys.version_info < (3, 10):
-    import importlib_metadata as metadata
-else:
-    from importlib import metadata
-
+from importlib import metadata
 
 import cmake
 
