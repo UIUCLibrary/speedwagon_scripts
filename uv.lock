@@ -548,7 +548,7 @@ wheels = [
 
 [[package]]
 name = "package-speedwagon"
-version = "0.1.4.dev0"
+version = "0.1.4"
 source = { editable = "." }
 dependencies = [
     { name = "cmake" },
