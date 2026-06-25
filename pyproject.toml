@@ -23,6 +23,7 @@ tox-uv = [
 type-checking = [
     "mypy",
     "types-pyinstaller",
+    "lxml",
 ]
 test = [
     "pytest",
