@@ -681,6 +681,16 @@ dependencies = [
 ]
 
 [package.dev-dependencies]
+ci = [
+    { name = "coverage" },
+    { name = "mypy" },
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "ruff" },
+    { name = "speedwagon" },
+    { name = "tox" },
+    { name = "types-pyinstaller" },
+]
 dev = [
     { name = "coverage" },
     { name = "mypy" },
@@ -715,6 +725,16 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
+ci = [
+    { name = "coverage" },
+    { name = "mypy" },
+    { name = "pre-commit" },
+    { name = "pytest" },
+    { name = "ruff" },
+    { name = "speedwagon", specifier = "==0.4.0b8", index = "https://nexus.library.illinois.edu/repository/uiuc_prescon_python/simple" },
+    { name = "tox" },
+    { name = "types-pyinstaller" },
+]
 dev = [
     { name = "coverage" },
     { name = "mypy" },
