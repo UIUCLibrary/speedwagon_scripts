@@ -10,9 +10,19 @@ library(
     )
 )
 
-def getSupportedPythonVersions(){
-    return ['3.10', '3.11', '3.12', '3.13', '3.14']
+
+def getConfig(){
+    node(){
+        checkout scm
+        def configCode = load('ci/jenkins/scripts/config.groovy')
+        def config = configCode.getConfig(
+            configId: 'speedwagon_scripts_pipeline_config',
+            defaultConfigFile: 'ci/jenkins/jenkins_config.json'
+        )
+        return config
+    }
 }
+
 
 def createWindowUVConfig(){
     return powershell(label: 'Setting up uv.toml config file', script: 'ci/jenkins/scripts/new-uv-global-config.ps1 $env:UV_INDEX_URL $env:UV_EXTRA_INDEX_URL', returnStdout: true).trim()
@@ -118,7 +128,7 @@ def testPackage(entry, params){
            error "Unable to test package due to unknown OS: ${entry.OS}"
     }
 }
-
+def config = getConfig()
 pipeline {
     agent none
     parameters{
@@ -434,33 +444,22 @@ pipeline {
                             axes: [
                                 [
                                     name: 'PYTHON_VERSION',
-                                    values: getSupportedPythonVersions()
+                                    values: config['supporting']['pythonVersions']
                                 ],
                                 [
                                     name: 'OS',
-                                    values: ['macos','windows']
+                                    values: config['supporting']['os']
                                 ],
                                 [
                                     name: 'ARCHITECTURE',
-                                    values: ['x86_64', 'arm64']
+                                    values: config['supporting']['architectures']
                                 ],
                                 [
                                     name: 'PACKAGE_TYPE',
                                     values: ['wheel', 'sdist'],
                                 ]
                             ],
-                            excludes: [
-                                [
-                                    [
-                                        name: 'OS',
-                                        values: 'windows'
-                                    ],
-                                    [
-                                        name: 'ARCHITECTURE',
-                                        values: 'arm64',
-                                    ]
-                                ]
-                            ],
+                            excludes: config['supporting']['exclusions'],
                             when: {entry -> "INCLUDE_${entry.OS}-${entry.ARCHITECTURE}".toUpperCase() && params["INCLUDE_${entry.OS}-${entry.ARCHITECTURE}".toUpperCase()]},
                             stages: [
                                 { entry ->
