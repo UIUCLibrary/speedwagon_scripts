@@ -24,79 +24,83 @@ def createUnixUvConfig(){
 
 def testWindowsPackage(entry, params){
     node('windows && docker'){
-        checkout scm
-        try{
-            unstash 'PYTHON_PACKAGES'
-            docker.image('python').inside(
-                "--label=purpose=ci --label \"JOB_NAME=\$JOB_NAME\" --label \"absoluteUrl=${currentBuild.absoluteUrl}\" --label \"BUILD_NUMBER=${currentBuild.number}\" " + \
-                '-e UV_CACHE_DIR=C:\\Users\\ContainerUser\\Documents\\cache\\uvcache ' +
-                '--mount type=volume,source=uv_python_cache_dir,target=C:\\Users\\ContainerUser\\Documents\\cache\\uvcache ' +
-                '-e UV_PYTHON_CACHE_DIR=C:\\Users\\ContainerUser\\Documents\\cache\\uvpython_cache ' +
-                '--mount type=volume,source=pipcache,target=C:\\Users\\ContainerUser\\Documents\\cache\\uvpython_cache ' +
-                '-e UV_TOOL_DIR=C:\\Users\\ContainerUser\\Documents\\cache\\uvtools ' +
-                '--mount type=volume,source=uv_cache_dir,target=C:\\Users\\ContainerUser\\Documents\\cache\\uvtools'
-            ){
-                bat(
-                    label: 'Install uv',
-                    script: '''python -m venv venv
-                               .\\venv\\Scripts\\pip install --disable-pip-version-check uv
-                               .\\venv\\Scripts\\uv python update-shell
-                            '''
-                )
-                withEnv([
-                    "UV_CONFIG_FILE=${createWindowUVConfig()}",
-                    "TOX_UV_PATH=${WORKSPACE}/venv/Scripts/uv.exe"
-                ]){
-                    bat ".\\venv\\Scripts\\uv python install cpython-${entry.PYTHON_VERSION}"
-                    script{
-                        def packages = findFiles(glob: entry.PACKAGE_TYPE == 'wheel' ? 'dist/*.whl' : 'dist/*.tar.gz')
-                        for (int i = 0; i < packages.length; i++) {
-                            def attempt = 0
-                            retry(2){
-                                withEnv([(attempt == 0) ? 'UV_OFFLINE=1' : 'UV_OFFLINE=0']){
-                                    attempt += 1
-                                    bat(
-                                        label: "Testing with tox: ${(attempt == 1) ? 'Offline' : 'Online'}",
-                                        script: ".\\venv\\Scripts\\uv run --only-group=tox-uv --frozen tox --installpkg ${packages[i].path} -e py${entry.PYTHON_VERSION.replace('.', '')}"
-                                    )
+        timeout(60){
+            checkout scm
+            try{
+                unstash 'PYTHON_PACKAGES'
+                docker.image('python').inside(
+                    "--label=purpose=ci --label \"JOB_NAME=\$JOB_NAME\" --label \"absoluteUrl=${currentBuild.absoluteUrl}\" --label \"BUILD_NUMBER=${currentBuild.number}\" " + \
+                    '-e UV_CACHE_DIR=C:\\Users\\ContainerUser\\Documents\\cache\\uvcache ' +
+                    '--mount type=volume,source=uv_python_cache_dir,target=C:\\Users\\ContainerUser\\Documents\\cache\\uvcache ' +
+                    '-e UV_PYTHON_CACHE_DIR=C:\\Users\\ContainerUser\\Documents\\cache\\uvpython_cache ' +
+                    '--mount type=volume,source=pipcache,target=C:\\Users\\ContainerUser\\Documents\\cache\\uvpython_cache ' +
+                    '-e UV_TOOL_DIR=C:\\Users\\ContainerUser\\Documents\\cache\\uvtools ' +
+                    '--mount type=volume,source=uv_cache_dir,target=C:\\Users\\ContainerUser\\Documents\\cache\\uvtools'
+                ){
+                    bat(
+                        label: 'Install uv',
+                        script: '''python -m venv venv
+                                   .\\venv\\Scripts\\pip install --disable-pip-version-check uv
+                                   .\\venv\\Scripts\\uv python update-shell
+                                '''
+                    )
+                    withEnv([
+                        "UV_CONFIG_FILE=${createWindowUVConfig()}",
+                        "TOX_UV_PATH=${WORKSPACE}/venv/Scripts/uv.exe"
+                    ]){
+                        bat ".\\venv\\Scripts\\uv python install cpython-${entry.PYTHON_VERSION}"
+                        script{
+                            def packages = findFiles(glob: entry.PACKAGE_TYPE == 'wheel' ? 'dist/*.whl' : 'dist/*.tar.gz')
+                            for (int i = 0; i < packages.length; i++) {
+                                def attempt = 0
+                                retry(2){
+                                    withEnv([(attempt == 0) ? 'UV_OFFLINE=1' : 'UV_OFFLINE=0']){
+                                        attempt += 1
+                                        bat(
+                                            label: "Testing with tox: ${(attempt == 1) ? 'Offline' : 'Online'}",
+                                            script: ".\\venv\\Scripts\\uv run --only-group=tox-uv --frozen tox --installpkg ${packages[i].path} -e py${entry.PYTHON_VERSION.replace('.', '')}"
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
+            } finally{
+                bat(label: 'Cleaning up', script: "${tool(name: 'Default', type: 'git')} clean -dfx")
             }
-        } finally{
-            bat(label: 'Cleaning up', script: "${tool(name: 'Default', type: 'git')} clean -dfx")
         }
     }
 }
 
 def testMacOSPackage(entry, params){
     node("macos && ${entry.ARCHITECTURE}"){
-        checkout scm
-        try{
-            unstash 'PYTHON_PACKAGES'
-            sh """python3 -m venv venv
-                  ./venv/bin/pip install --disable-pip-version-check uv
-                  uv python install cpython-${entry.PYTHON_VERSION}
-               """
-            withEnv(["TOX_UV_PATH=${WORKSPACE}/venv/bin/uv"]){
-                def packages = findFiles(glob: entry.PACKAGE_TYPE == 'wheel' ? 'dist/*.whl' : 'dist/*.tar.gz')
-                for (int i = 0; i < packages.length; i++) {
-                    def attempt = 0
-                    retry(2){
-                        attempt += 1
-                        withEnv([(attempt == 1) ? 'UV_OFFLINE=1' : 'UV_OFFLINE=0']){
-                            sh(
-                                label: "Testing with tox: ${(attempt == 1) ? 'Offline' : 'Online'}",
-                                script: "./venv/bin/uv run --frozen --only-group=tox-uv tox --installpkg ${packages[i].path} -e py${entry.PYTHON_VERSION.replace('.', '')}"
-                            )
+        timeout(60){
+            checkout scm
+            try{
+                unstash 'PYTHON_PACKAGES'
+                sh """python3 -m venv venv
+                      ./venv/bin/pip install --disable-pip-version-check uv
+                      uv python install cpython-${entry.PYTHON_VERSION}
+                   """
+                withEnv(["TOX_UV_PATH=${WORKSPACE}/venv/bin/uv"]){
+                    def packages = findFiles(glob: entry.PACKAGE_TYPE == 'wheel' ? 'dist/*.whl' : 'dist/*.tar.gz')
+                    for (int i = 0; i < packages.length; i++) {
+                        def attempt = 0
+                        retry(2){
+                            attempt += 1
+                            withEnv([(attempt == 1) ? 'UV_OFFLINE=1' : 'UV_OFFLINE=0']){
+                                sh(
+                                    label: "Testing with tox: ${(attempt == 1) ? 'Offline' : 'Online'}",
+                                    script: "./venv/bin/uv run --frozen --only-group=tox-uv tox --installpkg ${packages[i].path} -e py${entry.PYTHON_VERSION.replace('.', '')}"
+                                )
+                            }
                         }
                     }
-                }
-           }
-        } finally{
-            sh(label: 'Cleaning up', script: "${tool(name: 'Default', type: 'git')} clean -dfx")
+               }
+            } finally{
+                sh(label: 'Cleaning up', script: "${tool(name: 'Default', type: 'git')} clean -dfx")
+            }
         }
     }
 }
