@@ -33,6 +33,7 @@ def createUnixUvConfig(){
 }
 
 def testWindowsPackage(entry, params){
+    def MAX_RETRIES = 3
     node('windows && docker'){
         timeout(60){
             checkout scm
@@ -63,7 +64,7 @@ def testWindowsPackage(entry, params){
                             def packages = findFiles(glob: entry.PACKAGE_TYPE == 'wheel' ? 'dist/*.whl' : 'dist/*.tar.gz')
                             for (int i = 0; i < packages.length; i++) {
                                 def attempt = 0
-                                retry(2){
+                                retry(MAX_RETRIES){
                                     withEnv([(attempt == 0) ? 'UV_OFFLINE=1' : 'UV_OFFLINE=0']){
                                         attempt += 1
                                         bat(
