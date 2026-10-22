@@ -35,4 +35,4 @@ jobs:
             return "py${{matrix.python_version}}".replace('.','')
           result-encoding: string
       - name: Run Python tests
-        run: uv run --only-group tox-uv --isolated tox run --runner=uv-venv-lock-runner -e ${{ steps.tox-env.outputs.result }}
+        run: uv run --only-group tox-uv --frozen --isolated tox run --runner=uv-venv-lock-runner -e ${{ steps.tox-env.outputs.result }}
