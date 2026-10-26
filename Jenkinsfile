@@ -65,12 +65,19 @@ def testWindowsPackage(entry, params){
                             for (int i = 0; i < packages.length; i++) {
                                 def attempt = 0
                                 retry(MAX_RETRIES){
-                                    withEnv([(attempt == 0) ? 'UV_OFFLINE=1' : 'UV_OFFLINE=0']){
-                                        attempt += 1
-                                        bat(
-                                            label: "Testing with tox: ${(attempt == 1) ? 'Offline' : 'Online'}",
-                                            script: ".\\venv\\Scripts\\uv run --only-group=tox-uv --frozen tox --installpkg ${packages[i].path} -e py${entry.PYTHON_VERSION.replace('.', '')}"
-                                        )
+                                    try{
+                                        withEnv([(attempt == 0) ? 'UV_OFFLINE=1' : 'UV_OFFLINE=0']){
+                                            attempt += 1
+                                            bat(
+                                                label: "Testing with tox: ${(attempt == 1) ? 'Offline' : 'Online'}",
+                                                script: ".\\venv\\Scripts\\uv run --only-group=tox-uv --frozen tox --installpkg ${packages[i].path} -e py${entry.PYTHON_VERSION.replace('.', '')}"
+                                            )
+                                        }
+                                    } catch (Exception e) {
+                                        if (attempt < MAX_RETRIES) {
+                                            sleep 5
+                                        }
+                                        throw e
                                     }
                                 }
                             }
